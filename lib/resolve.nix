@@ -183,6 +183,26 @@ let
     type: extract: self:
     collect { filter = n: n.type == type; } extract self;
 
+  # Follow a custom edge label from a node (van Antwerpen 2018 §2.1).
+  # Returns list of target node IDs for the given label.
+  followEdge = label: self: id:
+    self.nodes.${id}.edgesByLabel.${label} or [ ];
+
+  # Collect data from nodes reachable via a custom edge label.
+  collectByLabel =
+    label: extract: self: id:
+    lib.concatMap (targetId: extract self targetId) (followEdge label self id);
+
+  # Ambiguity detection (spec Open Question #3, van Antwerpen 2018).
+  # Returns true when multiple declarations are reachable and none shadows the other.
+  # Uses queryAll to find all reachable results and checks for duplicates.
+  ambiguous =
+    args: self: id:
+    let
+      all = queryAll args self id;
+    in
+    builtins.length all > 1;
+
   # Return all reachable results (list) without shadowing (Neron 2015 §2.3, rule R).
   # Unlike query which returns the single visible result, queryAll returns every
   # reachable declaration for ambiguity detection.
@@ -236,6 +256,7 @@ in
     resolve
     query
     queryAll
+    ambiguous
     inherit_
     paramAttr
     circular
@@ -243,5 +264,7 @@ in
     subtypeOf
     collect
     collectByType
+    followEdge
+    collectByLabel
     ;
 }
