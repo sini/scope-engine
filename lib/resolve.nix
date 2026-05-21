@@ -10,57 +10,92 @@ let
     inner // lib.filterAttrs (k: _: !(inner ? ${k})) outer;
 
   # Resolve with specificity ordering D < I < P (Neron Fig. 2).
+  # Default: local shadows import, import shadows parent.
+  # Override via specificity parameter for alternative policies (Neron §2.5, van Antwerpen §2.1).
   resolve =
     {
       local ? null,
       imported ? null,
       inherited ? null,
+      localShadowsImport ? true,
+      importShadowsParent ? true,
     }:
-    if local != null then
+    if local != null && localShadowsImport then
+      local
+    else if imported != null && importShadowsParent then
+      imported
+    else if local != null then
+      # local doesn't shadow import but no import found
       local
     else if imported != null then
+      # import doesn't shadow parent but no parent found
       imported
     else
       inherited;
 
   # Generalized query combinator (van Antwerpen §2.1).
   # Subsumes inherit_, collectImports, and resolve as special cases.
+  # _seen tracks visited scopes to prevent import self-resolution (Neron 2015 §2.4, rule X).
   query =
     {
       dataFilter,
       labelWF ? "PI",
+      # Specificity policy (Neron §2.5, van Antwerpen §2.1).
+      localShadowsImport ? true,
+      importShadowsParent ? true,
+      # Transitive imports: follow imported scopes' own imports (Neron §2.5, P*.I*).
+      # When false (default), only direct imports are checked (P*.I?).
+      transitiveImports ? false,
+      _seen ? [ ],
     }:
     self: id:
     let
       node = self.nodes.${id};
       local = dataFilter node;
+      # Collect results from a single imported scope, optionally following its imports.
+      collectFromImport = seen: importId:
+        let
+          v = dataFilter self.nodes.${importId};
+          direct = lib.optional (v != null) v;
+          transitive =
+            if transitiveImports then
+              let
+                importNode = self.nodes.${importId};
+                nextUnseen = builtins.filter (iid: !(builtins.elem iid seen)) importNode.imports;
+                nextSeen = seen ++ [ importId ];
+              in
+              lib.concatMap (collectFromImport nextSeen) nextUnseen
+            else
+              [ ];
+        in
+        direct ++ transitive;
       imported =
         if lib.hasInfix "I" labelWF then
           let
-            results = lib.concatMap (
-              importId:
-              let
-                v = dataFilter self.nodes.${importId};
-              in
-              lib.optional (v != null) v
-            ) node.imports;
+            # Filter out already-seen imports to prevent cycles (Neron §2.4).
+            unseenImports = builtins.filter (iid: !(builtins.elem iid _seen)) node.imports;
+            results = lib.concatMap (collectFromImport (_seen ++ [ id ])) unseenImports;
           in
           if results == [ ] then null
-          # For attrset results, shadow-merge (Neron §5). For scalars, last wins.
+          # For attrset results, shadow-merge (Neron §5). For scalars, first wins
+          # (more direct imports shadow transitive ones).
           else if builtins.isAttrs (builtins.head results) then
             lib.foldl' (acc: v: shadow v acc) { } results
           else
-            lib.last results
+            builtins.head results
         else
           null;
       inherited =
         if lib.hasInfix "P" labelWF && node.parent != null then
-          query { inherit dataFilter labelWF; } self node.parent
+          query {
+            inherit dataFilter labelWF localShadowsImport importShadowsParent transitiveImports;
+            _seen = _seen ++ node.imports;
+          } self node.parent
         else
           null;
     in
     resolve {
-      inherit local imported inherited;
+      inherit local imported inherited localShadowsImport importShadowsParent;
     };
 
   # Inherited: walks parent chain until resolved.
@@ -142,17 +177,71 @@ let
       in
       if filter node then extract self id else [ ]
     ) (builtins.attrNames self.nodes);
+
+  # Typed collection: filter nodes by type field.
+  collectByType =
+    type: extract: self:
+    collect { filter = n: n.type == type; } extract self;
+
+  # Return all reachable results (list) without shadowing (Neron 2015 §2.3, rule R).
+  # Unlike query which returns the single visible result, queryAll returns every
+  # reachable declaration for ambiguity detection.
+  queryAll =
+    {
+      dataFilter,
+      labelWF ? "PI",
+      transitiveImports ? false,
+      _seen ? [ ],
+    }:
+    self: id:
+    let
+      node = self.nodes.${id};
+      local = dataFilter node;
+      unseenImports = builtins.filter (iid: !(builtins.elem iid _seen)) node.imports;
+      collectFromImportAll = seen: importId:
+        let
+          v = dataFilter self.nodes.${importId};
+          direct = lib.optional (v != null) v;
+          transitive =
+            if transitiveImports then
+              let
+                importNode = self.nodes.${importId};
+                nextUnseen = builtins.filter (iid: !(builtins.elem iid seen)) importNode.imports;
+                nextSeen = seen ++ [ importId ];
+              in
+              lib.concatMap (collectFromImportAll nextSeen) nextUnseen
+            else
+              [ ];
+        in
+        direct ++ transitive;
+      importResults =
+        if lib.hasInfix "I" labelWF then
+          lib.concatMap (collectFromImportAll (_seen ++ [ id ])) unseenImports
+        else
+          [ ];
+      parentResults =
+        if lib.hasInfix "P" labelWF && node.parent != null then
+          queryAll {
+            inherit dataFilter labelWF transitiveImports;
+            _seen = _seen ++ node.imports;
+          } self node.parent
+        else
+          [ ];
+    in
+    (lib.optional (local != null) local) ++ importResults ++ parentResults;
 in
 {
   inherit
     shadow
     resolve
     query
+    queryAll
     inherit_
     paramAttr
     circular
     collectImports
     subtypeOf
     collect
+    collectByType
     ;
 }
