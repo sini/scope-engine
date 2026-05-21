@@ -100,24 +100,28 @@ let
 
   # Inherited: walks parent chain until resolved.
   # allowParent encodes well-formedness P*.I* (Neron §2.4).
+  # _visited prevents infinite loops on malformed parent cycles.
   inherit_ =
     {
       resolve ? _: null,
       allowParent ? true,
+      _visited ? [ ],
     }:
     self: id:
     let
       node = self.nodes.${id};
       result = resolve node;
     in
-    if result != null then
+    if builtins.elem id _visited then
+      throw "scope-engine: parent cycle detected at '${id}' (parent relation must be well-founded, Neron §2.2)"
+    else if result != null then
       result
     else if !allowParent then
       null
     else if node.parent == null then
       null
     else
-      inherit_ { inherit resolve; } self node.parent;
+      inherit_ { inherit resolve; _visited = _visited ++ [ id ]; } self node.parent;
 
   # Parameterized attribute (Sloane 2010 §3, JastAdd).
   paramAttr = f: self: id: param: f self id param;
@@ -179,6 +183,7 @@ let
     ) (builtins.attrNames self.nodes);
 
   # Typed collection: filter nodes by type field.
+  # WARNING: iterates all nodes (delegates to collect). Prefer collectImports for demand-driven queries.
   collectByType =
     type: extract: self:
     collect { filter = n: n.type == type; } extract self;

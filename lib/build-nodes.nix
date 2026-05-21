@@ -68,12 +68,15 @@ let
       {
         inherit id;
         type = types.${id} or null;
-        # Backwards-compatible: parent from P edges.
+        # Parent from P edges. P(S) is a partial function (Neron §2.2) — at most one parent.
         parent =
           let
             targets = edgeTargets "P" id;
           in
-          if targets != [ ] then builtins.head targets else null;
+          if builtins.length targets > 1 then
+            throw "scope-engine: node '${id}' has ${toString (builtins.length targets)} parent edges (P must be a partial function, Neron §2.2)"
+          else if targets != [ ] then builtins.head targets
+          else null;
         # Backwards-compatible: imports from I edges.
         imports = edgeTargets "I" id;
         decls = decls.${id} or { };

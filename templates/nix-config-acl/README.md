@@ -80,7 +80,6 @@ system ∩ gates    = [] → enable = false
 | `nodesByType` | -- | Query all users, hosts, environments, groups |
 | Parent edges | Neron 2015 §2.3 | Host-environment-root hierarchy |
 | `ancestors` / `childrenIds` | -- | Host ancestry, environment children |
-| `inherit_` | Neron 2015 §2.3 | Gate resolution from environment to host |
 
 ## Tests
 

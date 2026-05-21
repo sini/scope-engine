@@ -31,4 +31,12 @@
   all-resources = builtins.sort builtins.lessThan (builtins.attrNames (engine.nodesByType result "resource"));
   bob-role-count = builtins.length (engine.followEdge "A" result "bob");
   alice-role-count = builtins.length (engine.followEdge "A" result "alice");
+
+  # collectByType: all roles via typed collection
+  role-names-via-collect = builtins.sort builtins.lessThan (
+    engine.collectByType "role" (self: id: [ id ]) result);
+
+  # collectByLabel: alice's role names via A edges
+  alice-roles-via-label = engine.collectByLabel "A"
+    (self: id: [ id ]) result "alice";
 }

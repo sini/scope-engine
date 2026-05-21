@@ -3,7 +3,7 @@
 {
   flag = engine.paramAttr (self: id: flagName:
     engine.query {
-      dataFilter = node: if node.decls ? ${flagName} then node.decls.${flagName} else null;
+      dataFilter = node: node.decls.${flagName} or null;
     } self id);
 
   effectiveFlags = self: id:
