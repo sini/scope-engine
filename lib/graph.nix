@@ -33,10 +33,40 @@ let
     };
 
   # Derived constructors.
-  vertices = vs: builtins.foldl' overlay empty (map vertex vs);
+  overlays = gs: builtins.foldl' overlay empty gs;
+  vertices = vs: overlays (map vertex vs);
   edge = from: to: connect (vertex from) (vertex to);
+  edges = es: overlays (map (e: edge e.from e.to) es);
+  path =
+    vs:
+    if vs == [ ] then empty
+    else if builtins.length vs == 1 then vertex (builtins.head vs)
+    else edges (
+      let pairs = i: if i >= builtins.length vs - 1 then [ ]
+        else [{ from = builtins.elemAt vs i; to = builtins.elemAt vs (i + 1); }] ++ pairs (i + 1);
+      in pairs 0
+    );
+  circuit =
+    vs:
+    if vs == [ ] then empty
+    else path (vs ++ [ (builtins.head vs) ]);
   star = center: leaves: connect (vertices leaves) (vertex center);
   clique = vs: builtins.foldl' connect empty (map vertex vs);
+  # Flip all edge directions.
+  transpose =
+    graph: {
+      inherit (graph) vertices;
+      edges = map (e: { from = e.to; to = e.from; }) graph.edges;
+    };
+  # Membership predicates.
+  hasVertex = v: graph: builtins.elem v graph.vertices;
+  hasEdge = from: to: graph: builtins.any (e: e.from == from && e.to == to) graph.edges;
+  # Graph removal operations.
+  removeVertex = v: induce (x: x != v);
+  removeEdge = efrom: eto: graph: {
+    inherit (graph) vertices;
+    edges = builtins.filter (e: !(e.from == efrom && e.to == eto)) graph.edges;
+  };
 
   # Map over vertices.
   gmap =
@@ -62,11 +92,20 @@ in
     vertex
     connect
     overlay
+    overlays
     vertices
     edge
+    edges
+    path
+    circuit
     star
     clique
     gmap
     induce
+    transpose
+    hasVertex
+    hasEdge
+    removeVertex
+    removeEdge
     ;
 }
