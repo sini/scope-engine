@@ -28,6 +28,14 @@ let
       direct = self.nodes.${id}.childrenIds;
     in
     direct ++ lib.concatMap (cid: descendants self cid) direct;
+
+  isAncestor = self: ancestorId: id: builtins.elem ancestorId (ancestors self id);
+
+  isDescendant = self: descendantId: id: builtins.elem descendantId (descendants self id);
+
+  # Return all nodes of a given type as an attrset.
+  nodesByType = self: type:
+    lib.filterAttrs (_: n: n.type == type) self.nodes;
 in
 {
   inherit
@@ -37,5 +45,8 @@ in
     ancestors
     siblings
     descendants
+    isAncestor
+    isDescendant
+    nodesByType
     ;
 }

@@ -52,6 +52,17 @@ let
     else path (vs ++ [ (builtins.head vs) ]);
   star = center: leaves: connect (vertices leaves) (vertex center);
   clique = vs: builtins.foldl' connect empty (map vertex vs);
+  # Construct graph from recursive tree structure (Mokhov 2017 §5.1).
+  # Input: { root: string, children: [tree] } where tree = { root, children }.
+  tree =
+    t:
+    let
+      childRoots = map (c: c.root) t.children;
+      childGraphs = map tree t.children;
+    in
+    overlays ([ (star t.root childRoots) ] ++ childGraphs);
+  # Construct graph from a list of trees (forest).
+  forest = ts: overlays (map tree ts);
   # Flip all edge directions.
   transpose =
     graph: {
@@ -100,6 +111,8 @@ in
     circuit
     star
     clique
+    tree
+    forest
     gmap
     induce
     transpose
