@@ -127,7 +127,7 @@ let
     {
       init,
       eq ? a: b: a == b,
-      maxIter ? 10,
+      maxIter ? 100,
     }:
     f: self: id:
     let
