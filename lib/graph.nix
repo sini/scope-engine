@@ -3,7 +3,8 @@
 # Four core operations: empty, vertex, overlay, connect.
 # Overlay is commutative, associative, idempotent.
 # Connect distributes over overlay; cross-product edges.
-# Vertex dedup deferred to buildNodes (exploits algebraic idempotence).
+# Vertices may contain duplicates; dedup is deferred to buildNodes where
+# it is cheap via genAttrs (exploits Mokhov's algebraic idempotence: x + x = x).
 let
   empty = {
     vertices = [ ];
@@ -37,19 +38,23 @@ let
   vertices = vs: overlays (map vertex vs);
   edge = from: to: connect (vertex from) (vertex to);
   edges = es: overlays (map (e: edge e.from e.to) es);
+  # Mokhov 2017 §5.1: path xs = edges (zip xs (tail xs)). O(n).
   path =
     vs:
     if vs == [ ] then empty
     else if builtins.length vs == 1 then vertex (builtins.head vs)
-    else edges (
-      let pairs = i: if i >= builtins.length vs - 1 then [ ]
-        else [{ from = builtins.elemAt vs i; to = builtins.elemAt vs (i + 1); }] ++ pairs (i + 1);
-      in pairs 0
-    );
+    else
+      let pairs = builtins.genList (i: {
+        from = builtins.elemAt vs i;
+        to = builtins.elemAt vs (i + 1);
+      }) (builtins.length vs - 1);
+      in edges pairs;
   circuit =
     vs:
     if vs == [ ] then empty
     else path (vs ++ [ (builtins.head vs) ]);
+  # Mokhov 2017 §5.1 defines star as center→leaves. Inverted here: leaves→center,
+  # matching scope-graph convention where parent edges point from child to parent.
   star = center: leaves: connect (vertices leaves) (vertex center);
   clique = vs: builtins.foldl' connect empty (map vertex vs);
   # Construct graph from recursive tree structure (Mokhov 2017 §5.1).
