@@ -20,11 +20,19 @@
 
   dom =
     let
-      hostTrait = {
-        __traitName = "host";
+      hostT = {
+        name = "host";
+        needs = [ ];
+        neededBy = [ ];
+        synth = [ ];
+        class.nixos = _: _: null;
       };
-      userTrait = {
-        __traitName = "user";
+      userT = {
+        name = "user";
+        needs = [ ];
+        neededBy = [ ];
+        synth = [ ];
+        class = { };
       };
       inherit (nest) walkDom buildDomGraph;
     in
@@ -32,9 +40,9 @@
       test-single-node = {
         expr =
           let
-            nodes = walkDom { } {
+            nodes = walkDom {
               igloo = {
-                is = [ hostTrait ];
+                is = [ hostT ];
                 system = "x86_64-linux";
               };
             };
@@ -46,9 +54,9 @@
       test-node-attrs = {
         expr =
           let
-            nodes = walkDom { } {
+            nodes = walkDom {
               igloo = {
-                is = [ hostTrait ];
+                is = [ hostT ];
                 system = "x86_64-linux";
               };
             };
@@ -73,11 +81,11 @@
       test-namespace-inheritance = {
         expr =
           let
-            nodes = walkDom { } {
+            nodes = walkDom {
               prod = {
                 env = "production";
                 web-1 = {
-                  is = [ hostTrait ];
+                  is = [ hostT ];
                 };
               };
             };
@@ -90,11 +98,11 @@
       test-node-overrides-inherited = {
         expr =
           let
-            nodes = walkDom { } {
+            nodes = walkDom {
               prod = {
                 env = "production";
                 web-1 = {
-                  is = [ hostTrait ];
+                  is = [ hostT ];
                   env = "staging";
                 };
               };
@@ -108,11 +116,11 @@
       test-nested-nodes = {
         expr =
           let
-            nodes = walkDom { } {
+            nodes = walkDom {
               igloo = {
-                is = [ hostTrait ];
+                is = [ hostT ];
                 users.tux = {
-                  is = [ userTrait ];
+                  is = [ userT ];
                 };
               };
             };
@@ -124,11 +132,11 @@
       test-nested-parent-path = {
         expr =
           let
-            nodes = walkDom { } {
+            nodes = walkDom {
               igloo = {
-                is = [ hostTrait ];
+                is = [ hostT ];
                 users.tux = {
-                  is = [ userTrait ];
+                  is = [ userT ];
                 };
               };
             };
@@ -141,13 +149,13 @@
       test-multiple-namespace-levels = {
         expr =
           let
-            nodes = walkDom { } {
+            nodes = walkDom {
               dc1 = {
                 region = "us-east";
                 prod = {
                   env = "prod";
                   web-1 = {
-                    is = [ hostTrait ];
+                    is = [ hostT ];
                   };
                 };
               };
@@ -166,11 +174,11 @@
       test-graph-has-parent-edges = {
         expr =
           let
-            nodes = walkDom { } {
+            nodes = walkDom {
               igloo = {
-                is = [ hostTrait ];
+                is = [ hostT ];
                 users.tux = {
-                  is = [ userTrait ];
+                  is = [ userT ];
                 };
               };
             };
@@ -183,11 +191,11 @@
       test-graph-children = {
         expr =
           let
-            nodes = walkDom { } {
+            nodes = walkDom {
               igloo = {
-                is = [ hostTrait ];
+                is = [ hostT ];
                 users.tux = {
-                  is = [ userTrait ];
+                  is = [ userT ];
                 };
               };
             };
@@ -328,16 +336,25 @@
   selectors =
     let
       hostTrait = {
-        __traitName = "host";
-        class = {
-          nixos = _: _: null;
-        };
+        name = "host";
+        needs = [ ];
+        neededBy = [ ];
+        synth = [ ];
+        class.nixos = _: _: null;
       };
       userTrait = {
-        __traitName = "user";
+        name = "user";
+        needs = [ ];
+        neededBy = [ ];
+        synth = [ ];
+        class = { };
       };
       serverTrait = {
-        __traitName = "server";
+        name = "server";
+        needs = [ ];
+        neededBy = [ ];
+        synth = [ ];
+        class = { };
       };
       nodes = [
         {
@@ -451,40 +468,78 @@
 
   traits =
     let
-      mkTrait = name: extra: { __traitName = name; } // extra;
-      hostT = mkTrait "host" { class.nixos = _: _: null; };
-      serverT = mkTrait "server" {
-        needs = [
-          nginxT
-          firewallT
-        ];
-      };
-      nginxT = mkTrait "nginx" { };
-      firewallT = mkTrait "firewall" { };
-      monitoringT = mkTrait "monitoring" { neededBy = [ serverT ]; };
-      webT = mkTrait "web" { needs = [ serverT ]; };
-      circularA = mkTrait "circA" { needs = [ circularB ]; };
-      circularB = mkTrait "circB" { needs = [ circularA ]; };
-
-      processedTraits = {
-        host = hostT;
-        server = serverT;
-        nginx = nginxT;
-        firewall = firewallT;
-        monitoring = monitoringT;
-        web = webT;
+      traits = rec {
+        host = {
+          name = "host";
+          class.nixos = _: _: null;
+          needs = [ ];
+          neededBy = [ ];
+          synth = [ ];
+        };
+        server = {
+          name = "server";
+          needs = [
+            nginx
+            firewall
+          ];
+          neededBy = [ ];
+          synth = [ ];
+          class = { };
+        };
+        nginx = {
+          name = "nginx";
+          needs = [ ];
+          neededBy = [ ];
+          synth = [ ];
+          class = { };
+        };
+        firewall = {
+          name = "firewall";
+          needs = [ ];
+          neededBy = [ ];
+          synth = [ ];
+          class = { };
+        };
+        monitoring = {
+          name = "monitoring";
+          neededBy = [ server ];
+          needs = [ ];
+          synth = [ ];
+          class = { };
+        };
+        web = {
+          name = "web";
+          needs = [ server ];
+          neededBy = [ ];
+          synth = [ ];
+          class = { };
+        };
+        circA = {
+          name = "circA";
+          needs = [ circB ];
+          neededBy = [ ];
+          synth = [ ];
+          class = { };
+        };
+        circB = {
+          name = "circB";
+          needs = [ circA ];
+          neededBy = [ ];
+          synth = [ ];
+          class = { };
+        };
       };
 
       inherit (nest) expandTraits expandNeededBy;
-      traitNames = ts: map (t: t.__traitName) ts;
+      traitNames = ts: map (t: t.name) ts;
     in
     {
       test-no-needs = {
-        expr = traitNames (expandTraits processedTraits [ hostT ] [ ]);
+        expr = traitNames (expandTraits [ traits.host ]);
         expected = [ "host" ];
       };
       test-direct-needs = {
-        expr = builtins.sort builtins.lessThan (traitNames (expandTraits processedTraits [ serverT ] [ ]));
+        expr = builtins.sort builtins.lessThan (traitNames (expandTraits [ traits.server ]));
         expected = [
           "firewall"
           "nginx"
@@ -492,7 +547,7 @@
         ];
       };
       test-transitive-needs = {
-        expr = builtins.sort builtins.lessThan (traitNames (expandTraits processedTraits [ webT ] [ ]));
+        expr = builtins.sort builtins.lessThan (traitNames (expandTraits [ traits.web ]));
         expected = [
           "firewall"
           "nginx"
@@ -503,13 +558,10 @@
       test-diamond-dedup = {
         expr =
           let
-            expanded =
-              expandTraits processedTraits
-                [
-                  webT
-                  serverT
-                ]
-                [ ];
+            expanded = expandTraits [
+              traits.web
+              traits.server
+            ];
             names = traitNames expanded;
           in
           builtins.length (builtins.filter (n: n == "server") names);
@@ -518,7 +570,7 @@
       test-circular-needs-safe = {
         expr =
           let
-            expanded = expandTraits processedTraits [ circularA ] [ ];
+            expanded = expandTraits [ traits.circA ];
           in
           builtins.sort builtins.lessThan (traitNames expanded);
         expected = [
@@ -534,17 +586,17 @@
               __path = "web-1";
               __parentPath = null;
               is = [
-                hostT
-                serverT
+                traits.host
+                traits.server
               ];
             };
             allNodes = [ node ];
-            expanded = expandNeededBy processedTraits [
-              hostT
-              serverT
+            expanded = expandNeededBy traits [
+              traits.host
+              traits.server
             ] node allNodes;
           in
-          builtins.any (t: t.__traitName == "monitoring") expanded;
+          builtins.any (t: t.name == "monitoring") expanded;
         expected = true;
       };
       test-neededby-no-match = {
@@ -554,19 +606,25 @@
               name = "web-1";
               __path = "web-1";
               __parentPath = null;
-              is = [ hostT ];
+              is = [ traits.host ];
             };
             allNodes = [ node ];
-            expanded = expandNeededBy processedTraits [ hostT ] node allNodes;
+            expanded = expandNeededBy traits [ traits.host ] node allNodes;
           in
-          builtins.any (t: t.__traitName == "monitoring") expanded;
+          builtins.any (t: t.name == "monitoring") expanded;
         expected = false;
       };
       test-needs-as-function = {
         expr =
           let
-            dynT = mkTrait "dynamic" { needs = traits: [ traits.nginx ]; };
-            expanded = expandTraits processedTraits [ dynT ] [ ];
+            dynT = {
+              name = "dynamic";
+              needs = [ traits.nginx ];
+              neededBy = [ ];
+              synth = [ ];
+              class = { };
+            };
+            expanded = expandTraits [ dynT ];
           in
           builtins.sort builtins.lessThan (traitNames expanded);
         expected = [
@@ -578,29 +636,56 @@
 
   engine-tests =
     let
-      mkTrait = name: extra: { __traitName = name; } // extra;
       mockNixos = _select: modules: {
         _type = "nixos";
         modules = modules;
       };
-      # Child entity class function returns contributions keyed by class name
-      # so they bubble up to the parent via collectChildFrags.
       mockHm = _select: modules: {
         homeManager = modules;
       };
-      hostT = mkTrait "host" { class.nixos = mockNixos; };
-      userT = mkTrait "user" { class.homeManager = mockHm; };
-      serverT = mkTrait "server" { needs = [ nginxT ]; };
-      nginxT = mkTrait "nginx" { };
-      adminT = mkTrait "admin" { };
-      monitoringT = mkTrait "monitoring" { neededBy = [ serverT ]; };
-      processedTraits = {
-        host = hostT;
-        user = userT;
-        server = serverT;
-        nginx = nginxT;
-        admin = adminT;
-        monitoring = monitoringT;
+      traits = rec {
+        host = {
+          name = "host";
+          class.nixos = mockNixos;
+          needs = [ ];
+          neededBy = [ ];
+          synth = [ ];
+        };
+        user = {
+          name = "user";
+          class.homeManager = mockHm;
+          needs = [ ];
+          neededBy = [ ];
+          synth = [ ];
+        };
+        server = {
+          name = "server";
+          needs = [ nginx ];
+          neededBy = [ ];
+          synth = [ ];
+          class = { };
+        };
+        nginx = {
+          name = "nginx";
+          needs = [ ];
+          neededBy = [ ];
+          synth = [ ];
+          class = { };
+        };
+        admin = {
+          name = "admin";
+          needs = [ ];
+          neededBy = [ ];
+          synth = [ ];
+          class = { };
+        };
+        monitoring = {
+          name = "monitoring";
+          neededBy = [ server ];
+          needs = [ ];
+          synth = [ ];
+          class = { };
+        };
       };
       sel = nest.selectors;
     in
@@ -609,17 +694,17 @@
         expr =
           let
             result = nest.evalNest {
-              trait = processedTraits;
+              inherit traits;
               rules = [
                 {
-                  is = hostT;
+                  is = traits.host;
                   nixos = {
                     networking.hostName = "test";
                   };
                 }
               ];
               igloo = {
-                is = [ hostT ];
+                is = [ "host" ];
               };
             };
           in
@@ -631,17 +716,17 @@
         expr =
           let
             result = nest.evalNest {
-              trait = processedTraits;
+              inherit traits;
               rules = [
                 {
-                  is = hostT;
+                  is = traits.host;
                   nixos = {
                     networking.hostName = "test";
                   };
                 }
               ];
               igloo = {
-                is = [ hostT ];
+                is = [ "host" ];
               };
             };
           in
@@ -653,10 +738,10 @@
         expr =
           let
             result = nest.evalNest {
-              trait = processedTraits;
+              inherit traits;
               rules = [
                 {
-                  is = serverT;
+                  is = traits.server;
                   nixos = {
                     services.nginx.enable = true;
                   };
@@ -664,12 +749,12 @@
               ];
               web-1 = {
                 is = [
-                  hostT
-                  serverT
+                  "host"
+                  "server"
                 ];
               };
               db-1 = {
-                is = [ hostT ];
+                is = [ "host" ];
               };
             };
           in
@@ -687,17 +772,17 @@
         expr =
           let
             result = nest.evalNest {
-              trait = processedTraits;
+              inherit traits;
               rules = [
                 {
-                  is = hostT;
+                  is = traits.host;
                   nixos = { };
                 }
               ];
               prod = {
                 env = "production";
                 web-1 = {
-                  is = [ hostT ];
+                  is = [ "host" ];
                 };
               };
             };
@@ -710,10 +795,10 @@
         expr =
           let
             result = nest.evalNest {
-              trait = processedTraits;
+              inherit traits;
               rules = [
                 {
-                  is = nginxT;
+                  is = traits.nginx;
                   nixos = {
                     services.nginx.enable = true;
                   };
@@ -721,8 +806,8 @@
               ];
               web-1 = {
                 is = [
-                  hostT
-                  serverT
+                  "host"
+                  "server"
                 ];
               };
             };
@@ -735,10 +820,10 @@
         expr =
           let
             result = nest.evalNest {
-              trait = processedTraits;
+              inherit traits;
               rules = [
                 {
-                  is = monitoringT;
+                  is = traits.monitoring;
                   nixos = {
                     services.monitoring.enable = true;
                   };
@@ -746,8 +831,8 @@
               ];
               web-1 = {
                 is = [
-                  hostT
-                  serverT
+                  "host"
+                  "server"
                 ];
               };
             };
@@ -760,23 +845,23 @@
         expr =
           let
             result = nest.evalNest {
-              trait = processedTraits;
+              inherit traits;
               rules = [
                 {
-                  is = hostT;
+                  is = traits.host;
                   nixos = {
                     a = 1;
                   };
                 }
                 {
-                  is = hostT;
+                  is = traits.host;
                   nixos = {
                     b = 2;
                   };
                 }
               ];
               igloo = {
-                is = [ hostT ];
+                is = [ "host" ];
               };
             };
           in
@@ -788,33 +873,33 @@
         expr =
           let
             result = nest.evalNest {
-              trait = processedTraits;
+              inherit traits;
               rules = [
                 {
                   is = [
-                    hostT
-                    (sel.has adminT)
+                    traits.host
+                    (sel.has traits.admin)
                   ];
                   nixos = {
                     security.sudo.enable = true;
                   };
                 }
                 {
-                  is = hostT;
+                  is = traits.host;
                   nixos = { };
                 }
               ];
               igloo = {
-                is = [ hostT ];
+                is = [ "host" ];
                 users.tux = {
                   is = [
-                    userT
-                    adminT
+                    "user"
+                    "admin"
                   ];
                 };
               };
               axon = {
-                is = [ hostT ];
+                is = [ "host" ];
               };
             };
             iglooMods = builtins.length (result.outputs.igloo.modules or [ ]);
@@ -833,19 +918,22 @@
       test-child-contributions-bubble-up = {
         expr =
           let
-            # User class fn returns { nixos = modules } to bubble up to parent host
-            userBubbleT = mkTrait "user" {
+            userBubbleT = {
+              name = "user";
               class.homeManager = _select: modules: {
                 nixos = modules;
               };
+              needs = [ ];
+              neededBy = [ ];
+              synth = [ ];
             };
             result = nest.evalNest {
-              trait = processedTraits // {
+              traits = traits // {
                 user = userBubbleT;
               };
               rules = [
                 {
-                  is = hostT;
+                  is = traits.host;
                   nixos = {
                     networking.hostName = "igloo";
                   };
@@ -858,7 +946,7 @@
                 }
               ];
               igloo = {
-                is = [ hostT ];
+                is = [ "host" ];
                 users.tux = {
                   is = [ userBubbleT ];
                 };
@@ -867,13 +955,39 @@
           in
           {
             rootOnly = builtins.attrNames result.outputs == [ "igloo" ];
-            # Child user's homeManager modules bubble up as nixos contributions
             hasUserConfig = builtins.any (m: m ? users) (result.outputs.igloo.modules or [ ]);
           };
         expected = {
           rootOnly = true;
           hasUserConfig = true;
         };
+      };
+
+      test-rule-synth = {
+        expr =
+          let
+            result = nest.evalNest {
+              inherit traits;
+              rules = [
+                {
+                  is = traits.host;
+                  synth = {
+                    node.derived = "computed";
+                  };
+                }
+                {
+                  is = traits.host;
+                  nixos = { };
+                }
+              ];
+              igloo = {
+                is = [ "host" ];
+              };
+            };
+            node = builtins.head (builtins.filter (n: n.name == "igloo") result._nodes);
+          in
+          node.derived or null;
+        expected = "computed";
       };
     };
 
@@ -883,64 +997,102 @@
         _type = "nixos";
         inherit modules;
       };
-      # User class function returns contributions keyed by class name for bubbling
       mockHm = _select: modules: {
         homeManager = modules;
       };
-      mkTrait = name: extra: { __traitName = name; } // extra;
-      hostT = mkTrait "host" { class.nixos = mockNixos; };
-      userT = mkTrait "user" { class.homeManager = mockHm; };
-      serverT = mkTrait "server" { needs = [ sshT ]; };
-      lbT = mkTrait "lb" { };
-      webT = mkTrait "web" { };
-      sshT = mkTrait "ssh" { };
-      adminT = mkTrait "admin" { };
-      monitoringT = mkTrait "monitoring" { neededBy = [ serverT ]; };
-      processedTraits = {
-        host = hostT;
-        user = userT;
-        server = serverT;
-        lb = lbT;
-        web = webT;
-        ssh = sshT;
-        admin = adminT;
-        monitoring = monitoringT;
+      traits = rec {
+        host = {
+          name = "host";
+          class.nixos = mockNixos;
+          needs = [ ];
+          neededBy = [ ];
+          synth = [ ];
+        };
+        user = {
+          name = "user";
+          class.homeManager = mockHm;
+          needs = [ ];
+          neededBy = [ ];
+          synth = [ ];
+        };
+        server = {
+          name = "server";
+          needs = [ ssh ];
+          neededBy = [ ];
+          synth = [ ];
+          class = { };
+        };
+        lb = {
+          name = "lb";
+          needs = [ ];
+          neededBy = [ ];
+          synth = [ ];
+          class = { };
+        };
+        web = {
+          name = "web";
+          needs = [ ];
+          neededBy = [ ];
+          synth = [ ];
+          class = { };
+        };
+        ssh = {
+          name = "ssh";
+          needs = [ ];
+          neededBy = [ ];
+          synth = [ ];
+          class = { };
+        };
+        admin = {
+          name = "admin";
+          needs = [ ];
+          neededBy = [ ];
+          synth = [ ];
+          class = { };
+        };
+        monitoring = {
+          name = "monitoring";
+          neededBy = [ server ];
+          needs = [ ];
+          synth = [ ];
+          class = { };
+        };
       };
       sel = nest.selectors;
       result = nest.evalNest {
-        trait = processedTraits;
+        inherit traits;
         rules = [
           {
-            is = hostT;
+            is = traits.host;
             nixos = {
               boot.loader.grub.enable = true;
             };
           }
           {
-            is = serverT;
+            is = traits.server;
             nixos = {
               services.openssh.enable = true;
             };
           }
           {
-            is = lbT;
+            is = traits.lb;
             nixos =
               { select, ... }:
               {
-                services.haproxy.backends = map (w: w.name) (select webT);
+                services.haproxy.backends = map (w: w.name) (select traits.web);
               };
           }
           {
             is = [
-              hostT
-              (sel.has adminT)
+              traits.host
+              (sel.has traits.admin)
             ];
             nixos = {
               security.sudo.enable = true;
             };
           }
           {
-            is = userT;
+            is = traits.user;
             homeManager = {
               programs.git.enable = true;
             };
@@ -950,39 +1102,38 @@
           env = "production";
           lb = {
             is = [
-              hostT
-              lbT
-              serverT
+              "host"
+              "lb"
+              "server"
             ];
           };
           web-1 = {
             is = [
-              hostT
-              webT
-              serverT
+              "host"
+              "web"
+              "server"
             ];
             users.alice = {
               is = [
-                userT
-                adminT
+                "user"
+                "admin"
               ];
             };
           };
           web-2 = {
             is = [
-              hostT
-              webT
-              serverT
+              "host"
+              "web"
+              "server"
             ];
             users.bob = {
-              is = [ userT ];
+              is = [ "user" ];
             };
           };
         };
       };
     in
     {
-      # Root-only output: only hosts appear, not child users
       test-all-hosts-in-outputs = {
         expr = builtins.sort builtins.lessThan (builtins.attrNames result.outputs);
         expected = [
@@ -1031,11 +1182,9 @@
             web1nodes = builtins.filter (n: n.name == "web-1") (result._nodes or [ ]);
             web1 = builtins.head web1nodes;
           in
-          builtins.any (t: t.__traitName == "monitoring") (web1.is or [ ]);
+          builtins.any (t: t.name == "monitoring") (web1.is or [ ]);
         expected = true;
       };
-      # Users are children — their HM contributions bubble up to parent host.
-      # Verify user nodes exist in _nodes but not in outputs.
       test-users-are-child-nodes = {
         expr =
           let
@@ -1048,20 +1197,31 @@
 
   edge-cases =
     let
-      mkTrait = name: extra: { __traitName = name; } // extra;
       mockNixos = _select: modules: {
         _type = "nixos";
         inherit modules;
       };
-      hostT = mkTrait "host" { class.nixos = mockNixos; };
-      markerT = mkTrait "marker" { };
+      hostT = {
+        name = "host";
+        class.nixos = mockNixos;
+        needs = [ ];
+        neededBy = [ ];
+        synth = [ ];
+      };
+      markerT = {
+        name = "marker";
+        needs = [ ];
+        neededBy = [ ];
+        synth = [ ];
+        class = { };
+      };
     in
     {
       test-empty-dom = {
         expr =
           let
             result = nest.evalNest {
-              trait = { };
+              traits = { };
               rules = [ ];
             };
           in
@@ -1072,7 +1232,7 @@
         expr =
           let
             result = nest.evalNest {
-              trait = {
+              traits = {
                 marker = markerT;
               };
               rules = [ ];
@@ -1088,7 +1248,7 @@
         expr =
           let
             result = nest.evalNest {
-              trait = {
+              traits = {
                 host = hostT;
               };
               rules = [
@@ -1120,7 +1280,7 @@
         expr =
           let
             result = nest.evalNest {
-              trait = {
+              traits = {
                 host = hostT;
               };
               rules = [
@@ -1150,7 +1310,7 @@
         expr =
           let
             result = nest.evalNest {
-              trait = {
+              traits = {
                 host = hostT;
               };
               rules = [
@@ -1176,16 +1336,10 @@
     };
 
   setup-tests =
-    let
-      mkTrait = name: extra: { __traitName = name; } // extra;
-    in
     {
-      test-mk-trait-schema = {
+      test-trait-kind-has-options = {
         expr =
-          let
-            schema = nest.mkTraitSchema { };
-          in
-          schema ? type;
+          nest.traitKind ? options;
         expected = true;
       };
 
