@@ -576,4 +576,242 @@
         ];
       };
     };
+
+  engine-tests =
+    let
+      mkTrait = name: extra: { __traitName = name; } // extra;
+      mockNixos = _select: modules: {
+        _type = "nixos";
+        modules = modules;
+      };
+      mockHm = _select: modules: {
+        _type = "hm";
+        modules = modules;
+      };
+      hostT = mkTrait "host" { class.nixos = mockNixos; };
+      userT = mkTrait "user" { class.homeManager = mockHm; };
+      serverT = mkTrait "server" { needs = [ nginxT ]; };
+      nginxT = mkTrait "nginx" { };
+      adminT = mkTrait "admin" { };
+      monitoringT = mkTrait "monitoring" { neededBy = [ serverT ]; };
+      processedTraits = {
+        host = hostT;
+        user = userT;
+        server = serverT;
+        nginx = nginxT;
+        admin = adminT;
+        monitoring = monitoringT;
+      };
+      sel = nest.selectors;
+    in
+    {
+      test-basic-output = {
+        expr =
+          let
+            result = nest.evalNest {
+              trait = processedTraits;
+              rules = [
+                {
+                  is = hostT;
+                  nixos = { networking.hostName = "test"; };
+                }
+              ];
+              igloo = {
+                is = [ hostT ];
+              };
+            };
+          in
+          result ? outputs && result.outputs ? igloo;
+        expected = true;
+      };
+
+      test-by-class = {
+        expr =
+          let
+            result = nest.evalNest {
+              trait = processedTraits;
+              rules = [
+                {
+                  is = hostT;
+                  nixos = { networking.hostName = "test"; };
+                }
+              ];
+              igloo = {
+                is = [ hostT ];
+              };
+            };
+          in
+          result ? byClass && result.byClass ? nixos;
+        expected = true;
+      };
+
+      test-rule-matching = {
+        expr =
+          let
+            result = nest.evalNest {
+              trait = processedTraits;
+              rules = [
+                {
+                  is = serverT;
+                  nixos = { services.nginx.enable = true; };
+                }
+              ];
+              web-1 = {
+                is = [
+                  hostT
+                  serverT
+                ];
+              };
+              db-1 = {
+                is = [ hostT ];
+              };
+            };
+          in
+          {
+            web1HasModules = builtins.length (result.outputs.web-1.modules or [ ]) > 0;
+            db1NoExtra = builtins.length (result.outputs.db-1.modules or [ ]) == 0;
+          };
+        expected = {
+          web1HasModules = true;
+          db1NoExtra = true;
+        };
+      };
+
+      test-namespace-inheritance-in-pipeline = {
+        expr =
+          let
+            result = nest.evalNest {
+              trait = processedTraits;
+              rules = [
+                {
+                  is = hostT;
+                  nixos = { };
+                }
+              ];
+              prod = {
+                env = "production";
+                web-1 = {
+                  is = [ hostT ];
+                };
+              };
+            };
+          in
+          result ? outputs && result.outputs ? web-1;
+        expected = true;
+      };
+
+      test-needs-expansion-in-pipeline = {
+        expr =
+          let
+            result = nest.evalNest {
+              trait = processedTraits;
+              rules = [
+                {
+                  is = nginxT;
+                  nixos = { services.nginx.enable = true; };
+                }
+              ];
+              web-1 = {
+                is = [
+                  hostT
+                  serverT
+                ];
+              };
+            };
+          in
+          builtins.length (result.outputs.web-1.modules or [ ]) > 0;
+        expected = true;
+      };
+
+      test-neededby-in-pipeline = {
+        expr =
+          let
+            result = nest.evalNest {
+              trait = processedTraits;
+              rules = [
+                {
+                  is = monitoringT;
+                  nixos = { services.monitoring.enable = true; };
+                }
+              ];
+              web-1 = {
+                is = [
+                  hostT
+                  serverT
+                ];
+              };
+            };
+          in
+          builtins.length (result.outputs.web-1.modules or [ ]) > 0;
+        expected = true;
+      };
+
+      test-multiple-rules-collect-as-list = {
+        expr =
+          let
+            result = nest.evalNest {
+              trait = processedTraits;
+              rules = [
+                {
+                  is = hostT;
+                  nixos = { a = 1; };
+                }
+                {
+                  is = hostT;
+                  nixos = { b = 2; };
+                }
+              ];
+              igloo = {
+                is = [ hostT ];
+              };
+            };
+          in
+          builtins.length (result.outputs.igloo.modules or [ ]);
+        expected = 2;
+      };
+
+      test-has-selector-in-rule = {
+        expr =
+          let
+            result = nest.evalNest {
+              trait = processedTraits;
+              rules = [
+                {
+                  is = [
+                    hostT
+                    (sel.has adminT)
+                  ];
+                  nixos = { security.sudo.enable = true; };
+                }
+                {
+                  is = hostT;
+                  nixos = { };
+                }
+              ];
+              igloo = {
+                is = [ hostT ];
+                users.tux = {
+                  is = [
+                    userT
+                    adminT
+                  ];
+                };
+              };
+              axon = {
+                is = [ hostT ];
+              };
+            };
+            iglooMods = builtins.length (result.outputs.igloo.modules or [ ]);
+            axonMods = builtins.length (result.outputs.axon.modules or [ ]);
+          in
+          {
+            iglooHasSudo = iglooMods == 2;
+            axonNoSudo = axonMods == 1;
+          };
+        expected = {
+          iglooHasSudo = true;
+          axonNoSudo = true;
+        };
+      };
+    };
 }
