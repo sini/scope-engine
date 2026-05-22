@@ -30,6 +30,13 @@ in
     mkCtx
     ;
   inherit (dom) walkDom buildDomGraph;
+  inherit (traitsLib)
+    expandTraits
+    expandNeededBy
+    applySynth
+    flattenTraitTree
+    deepMerge
+    ;
   inherit css;
   selectors = selectorsLib.constructors;
   inherit
