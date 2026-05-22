@@ -17,7 +17,7 @@ let
 
   attributes = {
     location =
-      engine.inherit_ { resolve = node: node.decls.location or null; };
+      engine.inherit' { resolve = node: node.decls.location or null; };
   };
 
   result = engine.eval {
@@ -25,7 +25,7 @@ let
   };
 in
 {
-  inherit_ = {
+  inherit' = {
     test-direct-decl = {
       expr = result.evaluated.root.get "location";
       expected = "SF";
@@ -51,7 +51,7 @@ in
           r = engine.eval {
             baseNodes = n;
             attributes = {
-              val = engine.inherit_ { resolve = node: node.decls.val or null; };
+              val = engine.inherit' { resolve = node: node.decls.val or null; };
             };
           };
         in
@@ -76,7 +76,7 @@ in
           r = engine.eval {
             baseNodes = n;
             attributes = {
-              x = engine.inherit_ { resolve = node: node.decls.x or null; };
+              x = engine.inherit' { resolve = node: node.decls.x or null; };
             };
           };
         in

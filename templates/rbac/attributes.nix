@@ -44,6 +44,6 @@ in
       hasPerm && !denied
     );
 
-    sensitivity = engine.inherit_ { resolve = node: node.decls.sensitivity or null; };
+    sensitivity = engine.inherit' { resolve = node: node.decls.sensitivity or null; };
   };
 }

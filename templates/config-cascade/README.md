@@ -21,7 +21,7 @@ Parent edges encode directory/namespace nesting (deeper overrides shallower). Im
 
 | Feature | Paper | What it tests |
 |---|---|---|
-| `inherit_` | Neron 2015 §2.3 | Config values inherited down the directory tree |
+| `inherit'` | Neron 2015 §2.3 | Config values inherited down the directory tree |
 | `shadow` | Neron 2015 §5 Def. 1 | Deeper config values override shallower ones |
 | `query` with `labelWF` | Neron 2015 §2.4 | Import-based includes (shared config) |
 | `queryAll` | Neron 2015 §2.3 | Override detection: find keys set at multiple levels |

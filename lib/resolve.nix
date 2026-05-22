@@ -34,7 +34,7 @@ let
       inherited;
 
   # Generalized query combinator (van Antwerpen §2.1).
-  # Subsumes inherit_, collectImports, and resolve as special cases.
+  # Subsumes inherit', collectImports, and resolve as special cases.
   # _seen tracks visited scopes to prevent import self-resolution (Neron 2015 §2.4, rule X).
   query =
     {
@@ -101,7 +101,7 @@ let
   # Inherited: walks parent chain until resolved.
   # allowParent encodes well-formedness P*.I* (Neron §2.4).
   # _visited prevents infinite loops on malformed parent cycles.
-  inherit_ =
+  inherit' =
     {
       resolve ? _: null,
       allowParent ? true,
@@ -121,7 +121,7 @@ let
     else if node.parent == null then
       null
     else
-      inherit_ { inherit resolve; _visited = _visited ++ [ id ]; } self node.parent;
+      inherit' { inherit resolve; _visited = _visited ++ [ id ]; } self node.parent;
 
   # Parameterized attribute (Sloane 2010 §3, JastAdd).
   paramAttr = f: self: id: param: f self id param;
@@ -262,7 +262,7 @@ in
     query
     queryAll
     ambiguous
-    inherit_
+    inherit'
     paramAttr
     circular
     collectImports

@@ -263,8 +263,8 @@
             labelWF = "P";
           } result "inner"; # → "green" (inner has local color, beats parent)
 
-          # inherit_: walks parent chain (Neron §2.3)
-          inherit-size = engine.inherit_ {
+          # inherit': walks parent chain (Neron §2.3)
+          inherit-size = engine.inherit' {
             resolve = n: n.decls.size or null;
           } result "deep"; # → "large" (deep → inner → outer)
         };
@@ -419,7 +419,7 @@
 
           attributes = {
             # Inherited: flows top-down via parent chain (Knuth 1968)
-            location = engine.inherit_ {
+            location = engine.inherit' {
               resolve = n: n.decls.location or null;
             };
 

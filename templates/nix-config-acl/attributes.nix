@@ -15,7 +15,7 @@ in
   attributes = {
     # Merged system-access-groups for a host:
     # unique(env.system-access-groups ++ host.system-access-groups)
-    # Cannot use inherit_ here because we MERGE levels, not shadow.
+    # Cannot use inherit' here because we MERGE levels, not shadow.
     effectiveGates =
       self: id:
       let
