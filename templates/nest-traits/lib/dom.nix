@@ -2,10 +2,10 @@
 let
   mkPath = prefix: key: if prefix == "" then key else "${prefix}.${key}";
 
-  walkDom = processedTraits: dom: walkDomRec processedTraits "" null { } dom;
+  walkDom = dom: walkDomRec "" null { } dom;
 
   walkDomRec =
-    processedTraits: pathPrefix: parentPath: inheritedAttrs: attrset:
+    pathPrefix: parentPath: inheritedAttrs: attrset:
     builtins.foldl' (
       acc: key:
       let
@@ -24,7 +24,7 @@ let
               __path = path;
               __parentPath = parentPath;
             };
-          children = walkDomRec processedTraits path path inheritedAttrs val;
+          children = walkDomRec path path inheritedAttrs val;
         in
         acc ++ [ node ] ++ children
       else
@@ -39,7 +39,7 @@ let
           );
           merged = inheritedAttrs // nsAttrs;
         in
-        acc ++ walkDomRec processedTraits path parentPath merged val
+        acc ++ walkDomRec path parentPath merged val
     ) [ ] (builtins.attrNames attrset);
 
   buildDomGraph =

@@ -24,7 +24,7 @@ let
   evalNest =
     nestCfg:
     let
-      processedTraits = nestCfg.trait or { };
+      traits = nestCfg.traits or { };
       rules =
         let
           r = nestCfg.rules or [ ];
@@ -34,23 +34,32 @@ let
         else
           lib.mapAttrsToList (_: v: v) (builtins.removeAttrs r [ "_module" ]);
       domInput = builtins.removeAttrs nestCfg [
-        "trait"
+        "traits"
         "rules"
       ];
 
+      # Resolve string refs in node.is to trait instances
+      resolveIs =
+        node:
+        let
+          resolved = map (x: if builtins.isString x then traits.${x} else x) node.is;
+        in
+        node // { is = resolved; };
+
       # Phase 1: DOM traversal + trait expansion
-      rawNodes = walkDom processedTraits domInput;
+      rawNodes = walkDom domInput;
+      resolvedNodes = map resolveIs rawNodes;
       expandedNodes = map (
         n:
         let
-          expandedIs = expandTraits processedTraits n.is rawNodes;
-          fullIs = expandNeededBy processedTraits expandedIs (builtins.removeAttrs n [ "is" ]) rawNodes;
+          expandedIs = expandTraits n.is;
+          fullIs = expandNeededBy traits expandedIs (builtins.removeAttrs n [ "is" ]) resolvedNodes;
         in
         n // { is = fullIs; }
-      ) rawNodes;
+      ) resolvedNodes;
 
       # Phase 2: Trait synth
-      synthesizedNodes = synthesizeNodes processedTraits expandedNodes;
+      synthesizedNodes = synthesizeNodes traits expandedNodes;
 
       # Build scope-engine graph for structural queries
       synthGraph = dom.buildDomGraph synthesizedNodes;
@@ -66,9 +75,9 @@ let
       ) synthesizedNodes;
 
       # Phase 4: Rule synth
-      finalAnnotated = applyRuleSynth processedTraits rules annotated synthesizedNodes;
+      finalAnnotated = applyRuleSynth traits rules annotated synthesizedNodes;
 
-      # Phase 5: Output processing — root nodes only
+      # Phase 5: Output processing -- root nodes only
       rootNodes = builtins.filter (
         n: !builtins.any (m: m.__path == n.__parentPath) finalAnnotated
       ) finalAnnotated;
@@ -101,7 +110,7 @@ let
   processNode =
     node: allAnnotated:
     let
-      entityT = firstMatch (t: t ? class) node.is;
+      entityT = firstMatch (t: (t.class or { }) != { }) node.is;
     in
     if entityT == null then
       null
@@ -128,8 +137,6 @@ let
       );
 
   # Recursively collect child class contributions.
-  # Each child entity calls its class function, which may return an attrset
-  # of { classKey = [modules] } to bubble up, or a scalar value.
   collectChildFrags =
     parentNode: allAnnotated:
     let
@@ -137,7 +144,7 @@ let
       childContrib =
         child:
         let
-          entityT = firstMatch (t: t ? class) child.is;
+          entityT = firstMatch (t: (t.class or { }) != { }) child.is;
         in
         if entityT == null then
           { }
@@ -178,8 +185,7 @@ let
       builtins.foldl' (
         a: key:
         let
-          result =
-            if builtins.isFunction rule.${key} then callWithArgs rule.${key} node ctx else rule.${key};
+          result = if builtins.isFunction rule.${key} then callWithArgs rule.${key} node ctx else rule.${key};
         in
         if key == "synth" then
           a // { synth = deepMerge (a.synth or { }) result; }
@@ -190,12 +196,12 @@ let
 
   # Trait synth: run synth fns from entity trait only (first trait with class).
   synthesizeNodes =
-    processedTraits: expandedNodes:
+    traits: expandedNodes:
     let
       synthOne =
         node:
         let
-          entityT = firstMatch (t: t ? class) node.is;
+          entityT = firstMatch (t: (t.class or { }) != { }) node.is;
           synthFns =
             if entityT != null && entityT ? synth then
               (if builtins.isList entityT.synth then entityT.synth else [ entityT.synth ])
@@ -208,7 +214,7 @@ let
             children = [ ];
           }
         else
-          applySynth processedTraits expandedNodes synthFns node;
+          applySynth traits expandedNodes synthFns node;
     in
     builtins.concatMap (
       node:
@@ -219,7 +225,7 @@ let
     ) expandedNodes;
 
   applyRuleSynth =
-    processedTraits: rules: annotated: synthesizedNodes:
+    traits: rules: annotated: synthesizedNodes:
     let
       synthOne =
         node:
@@ -232,7 +238,7 @@ let
             children = [ ];
           }
         else
-          applySynth processedTraits synthesizedNodes [ (_: extra) ] node;
+          applySynth traits synthesizedNodes [ (_: extra) ] node;
       withSynth = builtins.concatMap (
         node:
         let

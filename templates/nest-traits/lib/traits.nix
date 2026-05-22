@@ -5,32 +5,10 @@
 }:
 let
   inherit (selectorsLib) matchesOne mkCtx firstMatch;
-
-  traitSpecialKeys = [
-    "class"
-    "needs"
-    "neededBy"
-    "synth"
-    "__traitName"
-  ];
-
-  flattenTraitTree =
-    tree:
-    builtins.concatLists (
-      map (
-        k:
-        let
-          v = tree.${k};
-        in
-        if builtins.isAttrs v && v ? __traitName then
-          [ v ] ++ flattenTraitTree (builtins.removeAttrs v traitSpecialKeys)
-        else
-          [ ]
-      ) (builtins.attrNames tree)
-    );
+  css = import ./css.nix;
 
   expandTraits =
-    processedTraits: traitList: allNodes:
+    traitList:
     let
       go =
         seen: queue:
@@ -41,27 +19,35 @@ let
             t = builtins.head queue;
             rest = builtins.tail queue;
           in
-          if builtins.any (s: s.__traitName == t.__traitName) seen then
+          if builtins.any (s: s.name == t.name) seen then
             go seen rest
           else
             let
-              rawNeeds = t.needs or null;
-              needed =
-                if rawNeeds == null then
-                  [ ]
-                else if builtins.isFunction rawNeeds then
-                  rawNeeds processedTraits
-                else
-                  rawNeeds;
+              needed = map (
+                n:
+                if builtins.isString n then throw "nest: unresolved trait ref '${n}' in needs of '${t.name}'" else n
+              ) (t.needs or [ ]);
             in
             go (seen ++ [ t ]) (rest ++ needed);
     in
     go [ ] traitList;
 
+  matchesNeededByEntry =
+    traits: entry: node: ctx:
+    if entry ? name && entry ? needs then
+      builtins.any (t: t.name == entry.name) node.is
+    else if builtins.isString entry then
+      if traits ? ${entry} then
+        builtins.any (t: t.name == entry) node.is
+      else
+        matchesOne node (css.parseCssSel entry) ctx
+    else
+      matchesOne node entry ctx;
+
   expandNeededBy =
-    processedTraits: nodeIs: nodeAttrs: allNodes:
+    traits: nodeIs: nodeAttrs: allNodes:
     let
-      allTraits = flattenTraitTree processedTraits;
+      allTraitNames = builtins.attrNames traits;
       go =
         nodeIsAcc:
         let
@@ -70,17 +56,18 @@ let
           };
           ctx = mkCtx virtualNode allNodes;
           extras = builtins.filter (
-            t:
-            (t ? neededBy)
-            && t.neededBy != [ ]
-            && !(builtins.any (s: s.__traitName == t.__traitName) nodeIsAcc)
-            && builtins.any (sel: matchesOne virtualNode sel ctx) t.neededBy
-          ) allTraits;
+            name:
+            let
+              t = traits.${name};
+              nb = t.neededBy or [ ];
+            in
+            nb != [ ]
+            && !(builtins.any (s: s.name == name) nodeIsAcc)
+            && builtins.any (entry: matchesNeededByEntry traits entry virtualNode ctx) nb
+          ) allTraitNames;
+          extraInstances = map (name: traits.${name}) extras;
         in
-        if extras == [ ] then
-          nodeIsAcc
-        else
-          go (expandTraits processedTraits (nodeIsAcc ++ extras) allNodes);
+        if extras == [ ] then nodeIsAcc else go (expandTraits (nodeIsAcc ++ extraInstances));
     in
     go nodeIs;
 
@@ -107,7 +94,7 @@ let
       ) a bKeys;
 
   applySynth =
-    processedTraits: refNodes: synthFns: parentNode:
+    traits: refNodes: synthFns: parentNode:
     let
       ctx = mkCtx parentNode refNodes;
       synthResults = map (
@@ -124,8 +111,9 @@ let
       expandChild =
         child:
         let
-          expandedIs = expandTraits processedTraits child.is refNodes;
-          fullIs = expandNeededBy processedTraits expandedIs (builtins.removeAttrs child [ "is" ]) refNodes;
+          childIs = map (x: if builtins.isString x then traits.${x} else x) (child.is or [ ]);
+          expandedIs = expandTraits childIs;
+          fullIs = expandNeededBy traits expandedIs (builtins.removeAttrs child [ "is" ]) refNodes;
         in
         child
         // {
@@ -144,8 +132,7 @@ in
     expandTraits
     expandNeededBy
     applySynth
-    flattenTraitTree
     deepMerge
-    traitSpecialKeys
+    matchesNeededByEntry
     ;
 }

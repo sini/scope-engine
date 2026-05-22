@@ -96,8 +96,8 @@ let
       matchesOne node (css.parseCssSel sel) ctx
     else if sel ? __sel then
       matchesSel node sel ctx
-    else if sel ? __traitName then
-      builtins.any (t: t ? __traitName && t.__traitName == sel.__traitName) node.is
+    else if sel ? name && sel ? needs then
+      builtins.any (t: t.name == sel.name) node.is
     else
       false;
 
@@ -124,7 +124,7 @@ let
         when = callWithArgs sel.fn node ctx;
         class =
           let
-            entityT = firstMatch (x: x ? class) node.is;
+            entityT = firstMatch (t: (t.class or { }) != { }) node.is;
           in
           entityT != null && entityT.class ? ${sel.name};
         child =
@@ -144,8 +144,8 @@ let
   callWithArgs =
     fn: node: ctx:
     let
-      entityT = firstMatch (t: t ? class) (node.is or [ ]);
-      entityArgs = if entityT != null then { ${entityT.__traitName} = node; } else { };
+      entityT = firstMatch (t: (t.class or { }) != { }) (node.is or [ ]);
+      entityArgs = if entityT != null then { ${entityT.name} = node; } else { };
     in
     fn (builtins.intersectAttrs (builtins.functionArgs fn) ({ select = ctx.select; } // entityArgs));
 

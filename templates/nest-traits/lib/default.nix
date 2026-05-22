@@ -34,8 +34,8 @@ in
     expandTraits
     expandNeededBy
     applySynth
-    flattenTraitTree
     deepMerge
+    matchesNeededByEntry
     ;
   inherit css;
   selectors = selectorsLib.constructors;
@@ -43,7 +43,8 @@ in
     (import ./setup.nix {
       inherit lib schemaLib aspects;
     })
-    mkTraitSchema
+    traitKind
+    mkTraitRegistry
     mkRulesType
     evalNestModules
     ;
