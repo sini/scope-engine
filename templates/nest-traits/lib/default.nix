@@ -29,6 +29,7 @@ in
     callWithArgs
     mkCtx
     ;
+  inherit (dom) walkDom buildDomGraph;
   inherit css;
   selectors = selectorsLib.constructors;
   inherit
