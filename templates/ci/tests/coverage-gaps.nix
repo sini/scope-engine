@@ -117,8 +117,8 @@ in
       expected = "from-parent";
     };
 
-    # ─── inherit_ cycle detection ─────────────────────────────────
-    # Malformed parent graph with a cycle. inherit_ should throw,
+    # ─── inherit' cycle detection ─────────────────────────────────
+    # Malformed parent graph with a cycle. inherit' should throw,
     # not hang.
 
     test-inherit-parent-cycle-throws = {
@@ -135,7 +135,7 @@ in
           r = engine.eval {
             baseNodes = n;
             attributes = {
-              val = engine.inherit_ { resolve = node: node.decls.found or null; };
+              val = engine.inherit' { resolve = node: node.decls.found or null; };
             };
           };
           tried = builtins.tryEval (r.evaluated.a.get "val");

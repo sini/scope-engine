@@ -23,7 +23,7 @@ Role hierarchy:           Users:                Resources:
 | Custom edge labels (R, A, D) | van Antwerpen 2018 §2.1 | Role inheritance, user assignment, deny edges |
 | `followEdge` | van Antwerpen 2018 §2.1 | Traverse role hierarchy and user assignments |
 | `paramAttr` | Sloane 2010 §3 | hasPermission, isDenied, canAccess parameterized checks |
-| `inherit_` | Neron 2015 §2.3 | Resource sensitivity inherited from parent resources |
+| `inherit'` | Neron 2015 §2.3 | Resource sensitivity inherited from parent resources |
 | Scoped relations | van Antwerpen 2018 §2.1 | Deny rules as named relations on user nodes |
 | `nodesByType` | -- | Query all users, roles, resources independently |
 | `ancestors` / `childrenIds` | -- | Resource tree structure for documents |

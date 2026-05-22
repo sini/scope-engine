@@ -23,7 +23,7 @@ global                    dark-mode=false, new-editor=false, ai-assist=false, ma
 
 | Feature | Paper | What it tests |
 |---|---|---|
-| `inherit_` / `query` | Neron 2015 §2.3 | Flag values inherited down the hierarchy |
+| `inherit'` / `query` | Neron 2015 §2.3 | Flag values inherited down the hierarchy |
 | `shadow` | Neron 2015 §5 | User-level overrides shadow project/org/global |
 | HOAG synthesis | Vogt 1989 | Rollout tracking nodes for beta-enabled orgs |
 | `circular` | Sloane 2010 §2.2 | Rollout percentage convergence (0 -> 25 -> 50 -> 75 -> 100) |

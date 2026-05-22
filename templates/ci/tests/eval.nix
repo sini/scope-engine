@@ -36,7 +36,7 @@ let
   };
 
   attributes = {
-    location = engine.inherit_ { resolve = node: node.decls.location or null; };
+    location = engine.inherit' { resolve = node: node.decls.location or null; };
 
     headcount =
       self: id:

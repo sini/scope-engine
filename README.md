@@ -52,7 +52,7 @@ let
 
   attributes = {
     # Inherited attribute: location flows top-down from department to team
-    location = engine.inherit_ {
+    location = engine.inherit' {
       resolve = node: node.decls.location or null;
     };
 
@@ -221,10 +221,10 @@ Returns `true` when multiple declarations are reachable via `queryAll`. Built on
 
 Kiama-inspired vocabulary (Sloane et al., 2010) for self-documenting attribute definitions.
 
-#### `inherit_`
+#### `inherit'`
 
 ```nix
-inherit_ {
+inherit' {
   resolve;             # node → value | null — extract data from a node
   allowParent ? true;  # Encode well-formedness P*.I* (Neron §2.4)
 } self id
