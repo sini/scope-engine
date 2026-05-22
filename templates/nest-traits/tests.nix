@@ -448,4 +448,132 @@
         expected = "web-1";
       };
     };
+
+  traits =
+    let
+      mkTrait = name: extra: { __traitName = name; } // extra;
+      hostT = mkTrait "host" { class.nixos = _: _: null; };
+      serverT = mkTrait "server" {
+        needs = [
+          nginxT
+          firewallT
+        ];
+      };
+      nginxT = mkTrait "nginx" { };
+      firewallT = mkTrait "firewall" { };
+      monitoringT = mkTrait "monitoring" { neededBy = [ serverT ]; };
+      webT = mkTrait "web" { needs = [ serverT ]; };
+      circularA = mkTrait "circA" { needs = [ circularB ]; };
+      circularB = mkTrait "circB" { needs = [ circularA ]; };
+
+      processedTraits = {
+        host = hostT;
+        server = serverT;
+        nginx = nginxT;
+        firewall = firewallT;
+        monitoring = monitoringT;
+        web = webT;
+      };
+
+      inherit (nest) expandTraits expandNeededBy;
+      traitNames = ts: map (t: t.__traitName) ts;
+    in
+    {
+      test-no-needs = {
+        expr = traitNames (expandTraits processedTraits [ hostT ] [ ]);
+        expected = [ "host" ];
+      };
+      test-direct-needs = {
+        expr = builtins.sort builtins.lessThan (
+          traitNames (expandTraits processedTraits [ serverT ] [ ])
+        );
+        expected = [
+          "firewall"
+          "nginx"
+          "server"
+        ];
+      };
+      test-transitive-needs = {
+        expr = builtins.sort builtins.lessThan (
+          traitNames (expandTraits processedTraits [ webT ] [ ])
+        );
+        expected = [
+          "firewall"
+          "nginx"
+          "server"
+          "web"
+        ];
+      };
+      test-diamond-dedup = {
+        expr =
+          let
+            expanded = expandTraits processedTraits [
+              webT
+              serverT
+            ] [ ];
+            names = traitNames expanded;
+          in
+          builtins.length (builtins.filter (n: n == "server") names);
+        expected = 1;
+      };
+      test-circular-needs-safe = {
+        expr =
+          let
+            expanded = expandTraits processedTraits [ circularA ] [ ];
+          in
+          builtins.sort builtins.lessThan (traitNames expanded);
+        expected = [
+          "circA"
+          "circB"
+        ];
+      };
+      test-neededby-injection = {
+        expr =
+          let
+            node = {
+              name = "web-1";
+              __path = "web-1";
+              __parentPath = null;
+              is = [
+                hostT
+                serverT
+              ];
+            };
+            allNodes = [ node ];
+            expanded = expandNeededBy processedTraits [
+              hostT
+              serverT
+            ] node allNodes;
+          in
+          builtins.any (t: t.__traitName == "monitoring") expanded;
+        expected = true;
+      };
+      test-neededby-no-match = {
+        expr =
+          let
+            node = {
+              name = "web-1";
+              __path = "web-1";
+              __parentPath = null;
+              is = [ hostT ];
+            };
+            allNodes = [ node ];
+            expanded = expandNeededBy processedTraits [ hostT ] node allNodes;
+          in
+          builtins.any (t: t.__traitName == "monitoring") expanded;
+        expected = false;
+      };
+      test-needs-as-function = {
+        expr =
+          let
+            dynT = mkTrait "dynamic" { needs = traits: [ traits.nginx ]; };
+            expanded = expandTraits processedTraits [ dynT ] [ ];
+          in
+          builtins.sort builtins.lessThan (traitNames expanded);
+        expected = [
+          "dynamic"
+          "nginx"
+        ];
+      };
+    };
 }
