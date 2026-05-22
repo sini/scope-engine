@@ -18,6 +18,186 @@
     };
   };
 
+  dom =
+    let
+      hostTrait = {
+        __traitName = "host";
+      };
+      userTrait = {
+        __traitName = "user";
+      };
+      inherit (nest) walkDom buildDomGraph;
+    in
+    {
+      test-single-node = {
+        expr =
+          let
+            nodes = walkDom { } {
+              igloo = {
+                is = [ hostTrait ];
+                system = "x86_64-linux";
+              };
+            };
+          in
+          builtins.length nodes;
+        expected = 1;
+      };
+
+      test-node-attrs = {
+        expr =
+          let
+            nodes = walkDom { } {
+              igloo = {
+                is = [ hostTrait ];
+                system = "x86_64-linux";
+              };
+            };
+            n = builtins.head nodes;
+          in
+          {
+            inherit (n)
+              name
+              __path
+              __parentPath
+              system
+              ;
+          };
+        expected = {
+          name = "igloo";
+          __path = "igloo";
+          __parentPath = null;
+          system = "x86_64-linux";
+        };
+      };
+
+      test-namespace-inheritance = {
+        expr =
+          let
+            nodes = walkDom { } {
+              prod = {
+                env = "production";
+                web-1 = {
+                  is = [ hostTrait ];
+                };
+              };
+            };
+            n = builtins.head nodes;
+          in
+          n.env;
+        expected = "production";
+      };
+
+      test-node-overrides-inherited = {
+        expr =
+          let
+            nodes = walkDom { } {
+              prod = {
+                env = "production";
+                web-1 = {
+                  is = [ hostTrait ];
+                  env = "staging";
+                };
+              };
+            };
+            n = builtins.head nodes;
+          in
+          n.env;
+        expected = "staging";
+      };
+
+      test-nested-nodes = {
+        expr =
+          let
+            nodes = walkDom { } {
+              igloo = {
+                is = [ hostTrait ];
+                users.tux = {
+                  is = [ userTrait ];
+                };
+              };
+            };
+          in
+          builtins.length nodes;
+        expected = 2;
+      };
+
+      test-nested-parent-path = {
+        expr =
+          let
+            nodes = walkDom { } {
+              igloo = {
+                is = [ hostTrait ];
+                users.tux = {
+                  is = [ userTrait ];
+                };
+              };
+            };
+            tux = builtins.elemAt nodes 1;
+          in
+          tux.__parentPath;
+        expected = "igloo";
+      };
+
+      test-multiple-namespace-levels = {
+        expr =
+          let
+            nodes = walkDom { } {
+              dc1 = {
+                region = "us-east";
+                prod = {
+                  env = "prod";
+                  web-1 = {
+                    is = [ hostTrait ];
+                  };
+                };
+              };
+            };
+            n = builtins.head nodes;
+          in
+          {
+            inherit (n) region env;
+          };
+        expected = {
+          region = "us-east";
+          env = "prod";
+        };
+      };
+
+      test-graph-has-parent-edges = {
+        expr =
+          let
+            nodes = walkDom { } {
+              igloo = {
+                is = [ hostTrait ];
+                users.tux = {
+                  is = [ userTrait ];
+                };
+              };
+            };
+            graph = buildDomGraph nodes;
+          in
+          graph ? "igloo" && graph ? "igloo.users.tux" && graph."igloo.users.tux".parent == "igloo";
+        expected = true;
+      };
+
+      test-graph-children = {
+        expr =
+          let
+            nodes = walkDom { } {
+              igloo = {
+                is = [ hostTrait ];
+                users.tux = {
+                  is = [ userTrait ];
+                };
+              };
+            };
+            graph = buildDomGraph nodes;
+          in
+          graph."igloo".childrenIds;
+        expected = [ "igloo.users.tux" ];
+      };
+    };
+
   css =
     let
       inherit (nest.css) parseCompound parseCssSel;
