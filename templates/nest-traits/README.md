@@ -21,22 +21,22 @@ The pipeline walks the DOM, expands trait dependencies, runs synthesis, matches 
 
 ```nix
 result = nest.evalNest {
-  trait = { host = hostT; server = serverT; monitoring = monitoringT; ... };
+  traits = { inherit (traits) host server monitoring lb web user admin; };
   rules = [
-    { is = hostT; nixos = { boot.loader.grub.enable = true; }; }
-    { is = lbT;   nixos = { select, ... }: {
-        services.haproxy.backends = map (w: w.name) (select webT);
+    { is = traits.host; nixos = { boot.loader.grub.enable = true; }; }
+    { is = traits.lb;   nixos = { select, ... }: {
+        services.haproxy.backends = map (w: w.name) (select traits.web);
       };
     }
-    { is = [ hostT (sel.has adminT) ]; nixos = { security.sudo.enable = true; }; }
+    { is = [ traits.host (sel.has traits.admin) ]; nixos = { security.sudo.enable = true; }; }
   ];
   prod = {
-    lb    = { is = [ hostT lbT serverT ]; };
-    web-1 = { is = [ hostT webT serverT ]; users.alice = { is = [ userT adminT ]; }; };
-    web-2 = { is = [ hostT webT serverT ]; users.bob   = { is = [ userT ]; }; };
+    lb    = { is = [ "host" "lb" "server" ]; };
+    web-1 = { is = [ "host" "web" "server" ]; users.alice = { is = [ "user" "admin" ]; }; };
+    web-2 = { is = [ "host" "web" "server" ]; users.bob   = { is = [ "user" ]; }; };
   };
 };
-# → { outputs = { lb = ...; web-1 = ...; alice = ...; }; byClass = { nixos = {...}; homeManager = {...}; }; }
+# → { outputs = { lb = ...; web-1 = ...; web-2 = ...; }; byClass = { nixos = {...}; }; }
 ```
 
 ## Three-layer architecture
@@ -111,38 +111,45 @@ templates/nest-traits/
 │   ├── dom.nix            # DOM traversal (walkDom) + scope-engine graph (buildDomGraph)
 │   ├── traits.nix         # trait expansion (expandTraits, expandNeededBy, applySynth)
 │   └── setup.nix          # gen-schema/gen-aspects integration helpers
-└── tests.nix              # 71 tests across 8 suites
+└── tests.nix              # 76 tests across 8 suites
 ```
 
 ## Defining traits
 
-Traits are plain attrsets with a `__traitName` and optional special keys:
+Traits are schema-native instances defined as a `rec` attrset. Each trait has a `.name` field and all sidecar fields (`needs`, `neededBy`, `synth`, `class`):
 
 ```nix
-hostTrait = {
-  __traitName = "host";
-  class.nixos = select: modules: nixosSystem { inherit modules; };
-  synth = [
-    ({ select, ... }: { node.userCount = builtins.length (select.children userTrait); })
-  ];
+traits = rec {
+  host = {
+    name = "host";
+    class.nixos = select: modules: nixosSystem { inherit modules; };
+    needs = []; neededBy = []; synth = [];
+  };
+  server = {
+    name = "server";
+    needs = [ ssh firewall ];               # forward dependencies (direct refs)
+    neededBy = []; synth = []; class = {};
+  };
+  monitoring = {
+    name = "monitoring";
+    neededBy = [ server ];                  # auto-inject into matching nodes
+    needs = []; synth = []; class = {};
+  };
 };
+```
 
-serverTrait = {
-  __traitName = "server";
-  needs = [ sshTrait firewallTrait ];        # forward dependencies
-};
+Node `is` lists accept either direct trait refs or string refs resolved by the engine:
 
-monitoringTrait = {
-  __traitName = "monitoring";
-  neededBy = [ serverTrait ];                # auto-inject into matching nodes
-};
+```nix
+igloo = { is = [ traits.host ]; };          # direct ref
+igloo = { is = [ "host" ]; };               # string ref (resolved from traits registry)
 ```
 
 | Key | Type | Purpose |
 |---|---|---|
-| `__traitName` | string | Identity for dedup and selector matching |
+| `name` | string | Identity for dedup and selector matching |
 | `class` | `{ className = select: modules: value; }` | Output builder — defines what class this entity produces |
-| `needs` | `[traits]` or `traits: [traits]` | Forward dependency chain (BFS expanded) |
+| `needs` | `[traits]` | Forward dependency chain (BFS expanded) |
 | `neededBy` | `[selectors]` | Reverse injection — each entry matched independently (OR) |
 | `synth` | `[fns]` | Synthesis functions — derive attrs, inject virtual children |
 
@@ -153,16 +160,16 @@ Rules match nodes via selectors and contribute class-keyed configuration:
 ```nix
 rules = [
   # Static config
-  { is = hostTrait; nixos = { boot.loader.grub.enable = true; }; }
+  { is = traits.host; nixos = { boot.loader.grub.enable = true; }; }
 
   # Dynamic config via select
-  { is = lbTrait; nixos = { select, ... }: {
-      services.haproxy.backends = map (w: w.name) (select webTrait);
+  { is = traits.lb; nixos = { select, ... }: {
+      services.haproxy.backends = map (w: w.name) (select traits.web);
     };
   }
 
   # Compound selector (AND)
-  { is = [ hostTrait (sel.has adminTrait) ]; nixos = { security.sudo.enable = true; }; }
+  { is = [ traits.host (sel.has traits.admin) ]; nixos = { security.sudo.enable = true; }; }
 
   # CSS string selector
   { is = "#web-1[env=prod]"; nixos = { ... }; }
@@ -173,7 +180,7 @@ Class-keyed values are collected as lists (not deep-merged) to preserve NixOS mo
 
 ## Tests
 
-71 tests across 8 suites:
+76 tests across 8 suites:
 
 | Suite | Tests | What it covers |
 |---|---|---|
@@ -182,9 +189,10 @@ Class-keyed values are collected as lists (not deep-merged) to preserve NixOS mo
 | `dom` | 9 | DOM walk, namespace inheritance, overrides, nesting, scope-engine graph |
 | `selectors` | 17 | All 12 selector handlers, CSS integration, `callWithArgs` |
 | `traits` | 8 | Needs BFS, diamond dedup, circular safety, neededBy OR dispatch, needs-as-function |
-| `engine-tests` | 8 | Full pipeline: basic output, byClass, rule matching, needs/neededBy in pipeline, list collection, `:has` selector |
-| `demo` | 10 | Fleet scenario: lb + web nodes + users, cross-node select, sudo via `:has(admin)`, homeManager routing, neededBy monitoring |
+| `engine-tests` | 10 | Full pipeline: basic output, byClass, rule matching, needs/neededBy in pipeline, list collection, `:has` selector, child bubbling, rule synth |
+| `demo` | 9 | Fleet scenario: lb + web nodes + users, cross-node select, sudo via `:has(admin)`, neededBy monitoring |
 | `edge-cases` | 5 | Empty DOM, marker-only traits, CSS selectors in rules, deep nesting, multiple same-level nodes |
+| `setup-tests` | 4 | traitKind, mkRulesType, evalNestModules, schema integration |
 
 ```bash
 nix run github:nix-community/nix-unit -- --flake .#tests
@@ -192,7 +200,7 @@ nix run github:nix-community/nix-unit -- --flake .#tests
 
 ## Relationship to nest
 
-This template is a proof-of-concept that nest's evaluation engine can be decomposed into gen-schema + gen-aspects + scope-engine. The `evalNest` API accepts the same `{ trait, rules, ...dom }` shape as nest's `evalNest`, and the selector engine is a direct port.
+This template is a proof-of-concept that nest's evaluation engine can be decomposed into gen-schema + gen-aspects + scope-engine. The `evalNest` API accepts a `{ traits, rules, ...dom }` shape, and the selector engine is a direct port.
 
 Key differences from nest:
 
