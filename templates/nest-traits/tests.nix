@@ -583,9 +583,10 @@
         _type = "nixos";
         modules = modules;
       };
+      # Child entity class function returns contributions keyed by class name
+      # so they bubble up to the parent via collectChildFrags.
       mockHm = _select: modules: {
-        _type = "hm";
-        modules = modules;
+        homeManager = modules;
       };
       hostT = mkTrait "host" { class.nixos = mockNixos; };
       userT = mkTrait "user" { class.homeManager = mockHm; };
@@ -828,6 +829,52 @@
           axonNoSudo = true;
         };
       };
+
+      test-child-contributions-bubble-up = {
+        expr =
+          let
+            # User class fn returns { nixos = modules } to bubble up to parent host
+            userBubbleT = mkTrait "user" {
+              class.homeManager = _select: modules: {
+                nixos = modules;
+              };
+            };
+            result = nest.evalNest {
+              trait = processedTraits // {
+                user = userBubbleT;
+              };
+              rules = [
+                {
+                  is = hostT;
+                  nixos = {
+                    networking.hostName = "igloo";
+                  };
+                }
+                {
+                  is = userBubbleT;
+                  homeManager = {
+                    users.tux.shell = "/bin/zsh";
+                  };
+                }
+              ];
+              igloo = {
+                is = [ hostT ];
+                users.tux = {
+                  is = [ userBubbleT ];
+                };
+              };
+            };
+          in
+          {
+            rootOnly = builtins.attrNames result.outputs == [ "igloo" ];
+            # Child user's homeManager modules bubble up as nixos contributions
+            hasUserConfig = builtins.any (m: m ? users) (result.outputs.igloo.modules or [ ]);
+          };
+        expected = {
+          rootOnly = true;
+          hasUserConfig = true;
+        };
+      };
     };
 
   demo =
@@ -836,9 +883,9 @@
         _type = "nixos";
         inherit modules;
       };
+      # User class function returns contributions keyed by class name for bubbling
       mockHm = _select: modules: {
-        _type = "hm";
-        inherit modules;
+        homeManager = modules;
       };
       mkTrait = name: extra: { __traitName = name; } // extra;
       hostT = mkTrait "host" { class.nixos = mockNixos; };
@@ -935,11 +982,10 @@
       };
     in
     {
+      # Root-only output: only hosts appear, not child users
       test-all-hosts-in-outputs = {
         expr = builtins.sort builtins.lessThan (builtins.attrNames result.outputs);
         expected = [
-          "alice"
-          "bob"
           "lb"
           "web-1"
           "web-2"
@@ -951,13 +997,6 @@
           "lb"
           "web-1"
           "web-2"
-        ];
-      };
-      test-by-class-hm = {
-        expr = builtins.sort builtins.lessThan (builtins.attrNames (result.byClass.homeManager or { }));
-        expected = [
-          "alice"
-          "bob"
         ];
       };
       test-host-has-boot-config = {
@@ -995,8 +1034,14 @@
           builtins.any (t: t.__traitName == "monitoring") (web1.is or [ ]);
         expected = true;
       };
-      test-user-has-hm-output = {
-        expr = builtins.any (m: m ? programs && m.programs ? git) (result.outputs.alice.modules or [ ]);
+      # Users are children — their HM contributions bubble up to parent host.
+      # Verify user nodes exist in _nodes but not in outputs.
+      test-users-are-child-nodes = {
+        expr =
+          let
+            aliceNodes = builtins.filter (n: n.name == "alice") (result._nodes or [ ]);
+          in
+          builtins.length aliceNodes > 0 && !(result.outputs ? alice);
         expected = true;
       };
     };
@@ -1127,6 +1172,60 @@
           in
           builtins.length (builtins.attrNames result.outputs);
         expected = 3;
+      };
+    };
+
+  setup-tests =
+    let
+      mkTrait = name: extra: { __traitName = name; } // extra;
+    in
+    {
+      test-mk-trait-schema = {
+        expr =
+          let
+            schema = nest.mkTraitSchema { };
+          in
+          schema ? type;
+        expected = true;
+      };
+
+      test-mk-rules-type = {
+        expr =
+          let
+            rulesType = nest.mkRulesType { };
+          in
+          rulesType ? name;
+        expected = true;
+      };
+
+      test-eval-nest-modules = {
+        expr =
+          let
+            result = nest.evalNestModules {
+              modules = [ ];
+            };
+          in
+          result ? schema && result ? rules;
+        expected = true;
+      };
+
+      test-eval-nest-modules-with-schema = {
+        expr =
+          let
+            result = nest.evalNestModules {
+              modules = [
+                {
+                  schema.host = {
+                    class = {
+                      nixos = _: _: null;
+                    };
+                  };
+                }
+              ];
+            };
+          in
+          result.schema ? host;
+        expected = true;
       };
     };
 }

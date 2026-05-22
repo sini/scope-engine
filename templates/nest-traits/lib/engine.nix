@@ -68,14 +68,19 @@ let
       # Phase 4: Rule synth
       finalAnnotated = applyRuleSynth processedTraits rules annotated synthesizedNodes;
 
-      # Phase 5: Output processing
+      # Phase 5: Output processing — root nodes only
+      rootNodes = builtins.filter (
+        n: !builtins.any (m: m.__path == n.__parentPath) finalAnnotated
+      ) finalAnnotated;
       rawOutputs = builtins.filter (x: x != null && x.value != null) (
-        map (n: processNode n finalAnnotated) finalAnnotated
+        map (n: processNode n finalAnnotated) rootNodes
       );
-      outputs = builtins.listToAttrs (map (x: {
-        name = x.name;
-        value = x.value;
-      }) rawOutputs);
+      outputs = builtins.listToAttrs (
+        map (x: {
+          name = x.name;
+          value = x.value;
+        }) rawOutputs
+      );
       byClass = builtins.foldl' (
         acc: x:
         acc
@@ -91,8 +96,8 @@ let
       _nodes = finalAnnotated;
     };
 
-  # Process a single node: find its entity trait (one with class), call the class
-  # function with collected modules from rules
+  # Process a root entity node. Collects child class contributions recursively,
+  # merges with own rule-matched modules, then calls the class function.
   processNode =
     node: allAnnotated:
     let
@@ -103,7 +108,7 @@ let
     else
       let
         classFns = entityT.class;
-        allMods = node.__mergedCfg or { };
+        allMods = mergeModuleLists (node.__mergedCfg or { }) (collectChildFrags node allAnnotated);
         ctx = mkCtx node allAnnotated;
       in
       firstMatch (result: result != null) (
@@ -122,6 +127,50 @@ let
         ) (builtins.attrNames classFns)
       );
 
+  # Recursively collect child class contributions.
+  # Each child entity calls its class function, which may return an attrset
+  # of { classKey = [modules] } to bubble up, or a scalar value.
+  collectChildFrags =
+    parentNode: allAnnotated:
+    let
+      children = builtins.filter (n: n.__parentPath == parentNode.__path) allAnnotated;
+      childContrib =
+        child:
+        let
+          entityT = firstMatch (t: t ? class) child.is;
+        in
+        if entityT == null then
+          { }
+        else
+          let
+            classFns = entityT.class;
+            childMods = mergeModuleLists (child.__mergedCfg or { }) (collectChildFrags child allAnnotated);
+            ctx = mkCtx child allAnnotated;
+          in
+          builtins.foldl' (
+            acc: className:
+            if !(classFns ? ${className}) then
+              acc
+            else
+              let
+                result = (classFns.${className}) ctx.select (childMods.${className} or [ ]);
+              in
+              if result == null then
+                acc
+              else if builtins.isAttrs result then
+                builtins.foldl' (
+                  a: k:
+                  let
+                    v = result.${k};
+                  in
+                  a // { ${k} = (a.${k} or [ ]) ++ (if builtins.isList v then v else [ v ]); }
+                ) acc (builtins.attrNames result)
+              else
+                acc
+          ) { } (builtins.attrNames classFns);
+    in
+    builtins.foldl' mergeModuleLists { } (map childContrib children);
+
   mergeRuleConfigs =
     node: rules: ctx:
     builtins.foldl' (
@@ -139,16 +188,19 @@ let
       ) acc (builtins.attrNames (builtins.removeAttrs rule [ "is" ]))
     ) { } rules;
 
+  # Trait synth: run synth fns from entity trait only (first trait with class).
   synthesizeNodes =
     processedTraits: expandedNodes:
     let
       synthOne =
         node:
         let
-          synthFns = builtins.concatMap (
-            t:
-            if t ? synth then (if builtins.isList t.synth then t.synth else [ t.synth ]) else [ ]
-          ) node.is;
+          entityT = firstMatch (t: t ? class) node.is;
+          synthFns =
+            if entityT != null && entityT ? synth then
+              (if builtins.isList entityT.synth then entityT.synth else [ entityT.synth ])
+            else
+              [ ];
         in
         if synthFns == [ ] then
           {
