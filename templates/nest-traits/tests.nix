@@ -484,9 +484,7 @@
         expected = [ "host" ];
       };
       test-direct-needs = {
-        expr = builtins.sort builtins.lessThan (
-          traitNames (expandTraits processedTraits [ serverT ] [ ])
-        );
+        expr = builtins.sort builtins.lessThan (traitNames (expandTraits processedTraits [ serverT ] [ ]));
         expected = [
           "firewall"
           "nginx"
@@ -494,9 +492,7 @@
         ];
       };
       test-transitive-needs = {
-        expr = builtins.sort builtins.lessThan (
-          traitNames (expandTraits processedTraits [ webT ] [ ])
-        );
+        expr = builtins.sort builtins.lessThan (traitNames (expandTraits processedTraits [ webT ] [ ]));
         expected = [
           "firewall"
           "nginx"
@@ -507,10 +503,13 @@
       test-diamond-dedup = {
         expr =
           let
-            expanded = expandTraits processedTraits [
-              webT
-              serverT
-            ] [ ];
+            expanded =
+              expandTraits processedTraits
+                [
+                  webT
+                  serverT
+                ]
+                [ ];
             names = traitNames expanded;
           in
           builtins.length (builtins.filter (n: n == "server") names);
@@ -613,7 +612,9 @@
               rules = [
                 {
                   is = hostT;
-                  nixos = { networking.hostName = "test"; };
+                  nixos = {
+                    networking.hostName = "test";
+                  };
                 }
               ];
               igloo = {
@@ -633,7 +634,9 @@
               rules = [
                 {
                   is = hostT;
-                  nixos = { networking.hostName = "test"; };
+                  nixos = {
+                    networking.hostName = "test";
+                  };
                 }
               ];
               igloo = {
@@ -653,7 +656,9 @@
               rules = [
                 {
                   is = serverT;
-                  nixos = { services.nginx.enable = true; };
+                  nixos = {
+                    services.nginx.enable = true;
+                  };
                 }
               ];
               web-1 = {
@@ -708,7 +713,9 @@
               rules = [
                 {
                   is = nginxT;
-                  nixos = { services.nginx.enable = true; };
+                  nixos = {
+                    services.nginx.enable = true;
+                  };
                 }
               ];
               web-1 = {
@@ -731,7 +738,9 @@
               rules = [
                 {
                   is = monitoringT;
-                  nixos = { services.monitoring.enable = true; };
+                  nixos = {
+                    services.monitoring.enable = true;
+                  };
                 }
               ];
               web-1 = {
@@ -754,11 +763,15 @@
               rules = [
                 {
                   is = hostT;
-                  nixos = { a = 1; };
+                  nixos = {
+                    a = 1;
+                  };
                 }
                 {
                   is = hostT;
-                  nixos = { b = 2; };
+                  nixos = {
+                    b = 2;
+                  };
                 }
               ];
               igloo = {
@@ -781,7 +794,9 @@
                     hostT
                     (sel.has adminT)
                   ];
-                  nixos = { security.sudo.enable = true; };
+                  nixos = {
+                    security.sudo.enable = true;
+                  };
                 }
                 {
                   is = hostT;
@@ -812,6 +827,306 @@
           iglooHasSudo = true;
           axonNoSudo = true;
         };
+      };
+    };
+
+  demo =
+    let
+      mockNixos = _select: modules: {
+        _type = "nixos";
+        inherit modules;
+      };
+      mockHm = _select: modules: {
+        _type = "hm";
+        inherit modules;
+      };
+      mkTrait = name: extra: { __traitName = name; } // extra;
+      hostT = mkTrait "host" { class.nixos = mockNixos; };
+      userT = mkTrait "user" { class.homeManager = mockHm; };
+      serverT = mkTrait "server" { needs = [ sshT ]; };
+      lbT = mkTrait "lb" { };
+      webT = mkTrait "web" { };
+      sshT = mkTrait "ssh" { };
+      adminT = mkTrait "admin" { };
+      monitoringT = mkTrait "monitoring" { neededBy = [ serverT ]; };
+      processedTraits = {
+        host = hostT;
+        user = userT;
+        server = serverT;
+        lb = lbT;
+        web = webT;
+        ssh = sshT;
+        admin = adminT;
+        monitoring = monitoringT;
+      };
+      sel = nest.selectors;
+      result = nest.evalNest {
+        trait = processedTraits;
+        rules = [
+          {
+            is = hostT;
+            nixos = {
+              boot.loader.grub.enable = true;
+            };
+          }
+          {
+            is = serverT;
+            nixos = {
+              services.openssh.enable = true;
+            };
+          }
+          {
+            is = lbT;
+            nixos =
+              { select, ... }:
+              {
+                services.haproxy.backends = map (w: w.name) (select webT);
+              };
+          }
+          {
+            is = [
+              hostT
+              (sel.has adminT)
+            ];
+            nixos = {
+              security.sudo.enable = true;
+            };
+          }
+          {
+            is = userT;
+            homeManager = {
+              programs.git.enable = true;
+            };
+          }
+        ];
+        prod = {
+          env = "production";
+          lb = {
+            is = [
+              hostT
+              lbT
+              serverT
+            ];
+          };
+          web-1 = {
+            is = [
+              hostT
+              webT
+              serverT
+            ];
+            users.alice = {
+              is = [
+                userT
+                adminT
+              ];
+            };
+          };
+          web-2 = {
+            is = [
+              hostT
+              webT
+              serverT
+            ];
+            users.bob = {
+              is = [ userT ];
+            };
+          };
+        };
+      };
+    in
+    {
+      test-all-hosts-in-outputs = {
+        expr = builtins.sort builtins.lessThan (builtins.attrNames result.outputs);
+        expected = [
+          "alice"
+          "bob"
+          "lb"
+          "web-1"
+          "web-2"
+        ];
+      };
+      test-by-class-nixos = {
+        expr = builtins.sort builtins.lessThan (builtins.attrNames (result.byClass.nixos or { }));
+        expected = [
+          "lb"
+          "web-1"
+          "web-2"
+        ];
+      };
+      test-by-class-hm = {
+        expr = builtins.sort builtins.lessThan (builtins.attrNames (result.byClass.homeManager or { }));
+        expected = [
+          "alice"
+          "bob"
+        ];
+      };
+      test-host-has-boot-config = {
+        expr = builtins.any (m: m ? boot) (result.outputs.lb.modules or [ ]);
+        expected = true;
+      };
+      test-server-has-ssh = {
+        expr = builtins.any (m: m ? services && m.services ? openssh) (result.outputs.web-1.modules or [ ]);
+        expected = true;
+      };
+      test-lb-has-haproxy-with-backends = {
+        expr =
+          let
+            haproxyMods = builtins.filter (m: m ? services && m.services ? haproxy) (
+              result.outputs.lb.modules or [ ]
+            );
+          in
+          builtins.length haproxyMods > 0;
+        expected = true;
+      };
+      test-web1-has-sudo = {
+        expr = builtins.any (m: m ? security && m.security ? sudo) (result.outputs.web-1.modules or [ ]);
+        expected = true;
+      };
+      test-web2-no-sudo = {
+        expr = builtins.any (m: m ? security && m.security ? sudo) (result.outputs.web-2.modules or [ ]);
+        expected = false;
+      };
+      test-neededby-monitoring-injected = {
+        expr =
+          let
+            web1nodes = builtins.filter (n: n.name == "web-1") (result._nodes or [ ]);
+            web1 = builtins.head web1nodes;
+          in
+          builtins.any (t: t.__traitName == "monitoring") (web1.is or [ ]);
+        expected = true;
+      };
+      test-user-has-hm-output = {
+        expr = builtins.any (m: m ? programs && m.programs ? git) (result.outputs.alice.modules or [ ]);
+        expected = true;
+      };
+    };
+
+  edge-cases =
+    let
+      mkTrait = name: extra: { __traitName = name; } // extra;
+      mockNixos = _select: modules: {
+        _type = "nixos";
+        inherit modules;
+      };
+      hostT = mkTrait "host" { class.nixos = mockNixos; };
+      markerT = mkTrait "marker" { };
+    in
+    {
+      test-empty-dom = {
+        expr =
+          let
+            result = nest.evalNest {
+              trait = { };
+              rules = [ ];
+            };
+          in
+          result.outputs == { } && result.byClass == { };
+        expected = true;
+      };
+      test-node-without-entity-trait-skipped = {
+        expr =
+          let
+            result = nest.evalNest {
+              trait = {
+                marker = markerT;
+              };
+              rules = [ ];
+              node = {
+                is = [ markerT ];
+              };
+            };
+          in
+          result.outputs;
+        expected = { };
+      };
+      test-css-string-selector-in-rule = {
+        expr =
+          let
+            result = nest.evalNest {
+              trait = {
+                host = hostT;
+              };
+              rules = [
+                {
+                  is = "#igloo";
+                  nixos = {
+                    matched = true;
+                  };
+                }
+              ];
+              igloo = {
+                is = [ hostT ];
+              };
+              axon = {
+                is = [ hostT ];
+              };
+            };
+          in
+          {
+            iglooMatched = builtins.length (result.outputs.igloo.modules or [ ]) > 0;
+            axonNotMatched = builtins.length (result.outputs.axon.modules or [ ]) == 0;
+          };
+        expected = {
+          iglooMatched = true;
+          axonNotMatched = true;
+        };
+      };
+      test-deep-namespace-nesting = {
+        expr =
+          let
+            result = nest.evalNest {
+              trait = {
+                host = hostT;
+              };
+              rules = [
+                {
+                  is = hostT;
+                  nixos = { };
+                }
+              ];
+              dc1 = {
+                region = "us";
+                az = {
+                  zone = "a";
+                  prod = {
+                    env = "prod";
+                    web-1 = {
+                      is = [ hostT ];
+                    };
+                  };
+                };
+              };
+            };
+          in
+          result ? outputs && result.outputs ? web-1;
+        expected = true;
+      };
+      test-multiple-nodes-same-level = {
+        expr =
+          let
+            result = nest.evalNest {
+              trait = {
+                host = hostT;
+              };
+              rules = [
+                {
+                  is = hostT;
+                  nixos = { };
+                }
+              ];
+              a = {
+                is = [ hostT ];
+              };
+              b = {
+                is = [ hostT ];
+              };
+              c = {
+                is = [ hostT ];
+              };
+            };
+          in
+          builtins.length (builtins.attrNames result.outputs);
+        expected = 3;
       };
     };
 }
