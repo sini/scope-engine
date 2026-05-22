@@ -324,4 +324,128 @@
         };
       };
     };
+
+  selectors =
+    let
+      hostTrait = {
+        __traitName = "host";
+        class = {
+          nixos = _: _: null;
+        };
+      };
+      userTrait = {
+        __traitName = "user";
+      };
+      serverTrait = {
+        __traitName = "server";
+      };
+      nodes = [
+        {
+          name = "web-1";
+          __path = "prod.web-1";
+          __parentPath = "prod";
+          is = [
+            hostTrait
+            serverTrait
+          ];
+          env = "prod";
+          system = "x86_64-linux";
+        }
+        {
+          name = "web-2";
+          __path = "prod.web-2";
+          __parentPath = "prod";
+          is = [ hostTrait ];
+          env = "prod";
+        }
+        {
+          name = "alice";
+          __path = "prod.web-1.alice";
+          __parentPath = "prod.web-1";
+          is = [ userTrait ];
+        }
+        {
+          name = "prod";
+          __path = "prod";
+          __parentPath = null;
+          is = [ ];
+        }
+      ];
+      web1 = builtins.elemAt nodes 0;
+      web2 = builtins.elemAt nodes 1;
+      alice = builtins.elemAt nodes 2;
+      ctx = name: nest.mkCtx name nodes;
+      inherit (nest) matchesOne;
+      sel = nest.selectors;
+    in
+    {
+      test-trait-match = {
+        expr = matchesOne web1 hostTrait (ctx web1);
+        expected = true;
+      };
+      test-trait-no-match = {
+        expr = matchesOne web1 userTrait (ctx web1);
+        expected = false;
+      };
+      test-star = {
+        expr = matchesOne web1 sel.star (ctx web1);
+        expected = true;
+      };
+      test-and-compound = {
+        expr = matchesOne web1 [ hostTrait serverTrait ] (ctx web1);
+        expected = true;
+      };
+      test-and-compound-fail = {
+        expr = matchesOne web2 [ hostTrait serverTrait ] (ctx web2);
+        expected = false;
+      };
+      test-attr-eq = {
+        expr = matchesOne web1 (sel.attrs { env = "prod"; }) (ctx web1);
+        expected = true;
+      };
+      test-attr-eq-fail = {
+        expr = matchesOne web1 (sel.attrs { env = "staging"; }) (ctx web1);
+        expected = false;
+      };
+      test-not = {
+        expr = matchesOne web1 (sel.not serverTrait) (ctx web1);
+        expected = false;
+      };
+      test-not-pass = {
+        expr = matchesOne web2 (sel.not serverTrait) (ctx web2);
+        expected = true;
+      };
+      test-has-child = {
+        expr = matchesOne web1 (sel.has userTrait) (ctx web1);
+        expected = true;
+      };
+      test-has-child-fail = {
+        expr = matchesOne web2 (sel.has userTrait) (ctx web2);
+        expected = false;
+      };
+      test-within = {
+        expr = matchesOne alice (sel.within hostTrait) (ctx alice);
+        expected = true;
+      };
+      test-when = {
+        expr = matchesOne web1 (sel.when ({ select, ... }: web1.env == "prod")) (ctx web1);
+        expected = true;
+      };
+      test-class-match = {
+        expr = matchesOne web1 (sel.class "nixos") (ctx web1);
+        expected = true;
+      };
+      test-css-string = {
+        expr = matchesOne web1 "#web-1" (ctx web1);
+        expected = true;
+      };
+      test-css-attr = {
+        expr = matchesOne web1 "[env=prod]" (ctx web1);
+        expected = true;
+      };
+      test-call-with-args = {
+        expr = nest.callWithArgs ({ select, host, ... }: host.name) web1 (ctx web1);
+        expected = "web-1";
+      };
+    };
 }
