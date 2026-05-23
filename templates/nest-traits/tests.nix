@@ -1403,7 +1403,7 @@
                     };
                     config.traits.server = { };
                     config.traits.monitoring = {
-                      neededBy = [ config.traits.server ];
+                      neededBy = [ "server" ];
                     };
                   }
                 )

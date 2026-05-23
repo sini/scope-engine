@@ -91,12 +91,12 @@
     },
     "scope-engine": {
       "locked": {
-        "dirtyRev": "ea4a1ea4a45d9706fce1426c9468e54aa7c9ac15-dirty",
-        "dirtyShortRev": "ea4a1ea-dirty",
-        "lastModified": 1779417049,
-        "narHash": "sha256-LSXteSPviXxZQbGMqfLVti83Vr0avxXVd4sZLMLfcbo=",
-        "type": "git",
-        "url": "file:///home/sini/Documents/repos/scope-engine"
+        "lastModified": 1779345426,
+        "narHash": "sha256-/1tG4L/peDcpNwHuOnhNSIvrKo+CwZjGN5Vam2RL6xE=",
+        "owner": "sini",
+        "repo": "scope-engine",
+        "rev": "ccfc650751d5d83cdf5eb822de97e55df988a890",
+        "type": "github"
       },
       "original": {
         "owner": "sini",
