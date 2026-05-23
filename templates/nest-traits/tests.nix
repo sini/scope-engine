@@ -581,20 +581,10 @@
       test-neededby-injection = {
         expr =
           let
-            node = {
-              name = "web-1";
-              __path = "web-1";
-              __parentPath = null;
-              is = [
-                traits.host
-                traits.server
-              ];
-            };
-            allNodes = [ node ];
             expanded = expandNeededBy traits [
               traits.host
               traits.server
-            ] node allNodes;
+            ];
           in
           builtins.any (t: t.name == "monitoring") expanded;
         expected = true;
@@ -602,14 +592,7 @@
       test-neededby-no-match = {
         expr =
           let
-            node = {
-              name = "web-1";
-              __path = "web-1";
-              __parentPath = null;
-              is = [ traits.host ];
-            };
-            allNodes = [ node ];
-            expanded = expandNeededBy traits [ traits.host ] node allNodes;
+            expanded = expandNeededBy traits [ traits.host ];
           in
           builtins.any (t: t.name == "monitoring") expanded;
         expected = false;
@@ -1380,6 +1363,125 @@
           in
           result.schema ? host;
         expected = true;
+      };
+
+      test-needs-selector-resolution = {
+        expr =
+          let
+            result = nest.evalNestModules {
+              modules = [
+                (
+                  { config, ... }:
+                  {
+                    config.traits.ssh = { category = "security"; };
+                    config.traits.firewall = { category = "security"; };
+                    config.traits.nginx = { category = "web"; };
+                    config.traits.server = {
+                      needs = [
+                        (nest.selectors.attrs { category = "security"; })
+                      ];
+                    };
+                  }
+                )
+              ];
+            };
+          in
+          builtins.sort builtins.lessThan (map (t: t.name) result.traits.server.needs);
+        expected = [ "firewall" "ssh" ];
+      };
+
+      test-neededby-selector-resolution = {
+        expr =
+          let
+            result = nest.evalNestModules {
+              modules = [
+                (
+                  { config, ... }:
+                  {
+                    config.traits.host = {
+                      class.nixos = _: _: null;
+                    };
+                    config.traits.server = { };
+                    config.traits.monitoring = {
+                      neededBy = [ config.traits.server ];
+                    };
+                  }
+                )
+              ];
+            };
+          in
+          builtins.length result.traits.monitoring.neededBy > 0
+          && (builtins.head result.traits.monitoring.neededBy).name == "server";
+        expected = true;
+      };
+
+      test-setof-dedup = {
+        expr =
+          let
+            result = nest.evalNestModules {
+              modules = [
+                (
+                  { config, ... }:
+                  {
+                    config.traits.ssh = { category = "security"; };
+                    config.traits.server = {
+                      needs = [
+                        "ssh"
+                        (nest.selectors.attrs { category = "security"; })
+                      ];
+                    };
+                  }
+                )
+              ];
+            };
+          in
+          builtins.length result.traits.server.needs;
+        expected = 1;
+      };
+
+      test-trait-attrs-matchable = {
+        expr =
+          let
+            result = nest.evalNestModules {
+              modules = [
+                (
+                  { config, ... }:
+                  {
+                    config.traits.ssh = { category = "security"; port = 22; };
+                    config.traits.http = { category = "web"; port = 80; };
+                    config.traits.server = {
+                      needs = [
+                        (nest.selectors.attrs { category = "security"; })
+                      ];
+                    };
+                  }
+                )
+              ];
+            };
+          in
+          map (t: t.name) result.traits.server.needs;
+        expected = [ "ssh" ];
+      };
+
+      test-self-need-validator = {
+        expr =
+          let
+            result = nest.evalNestModules {
+              modules = [
+                (
+                  { config, ... }:
+                  {
+                    config.traits.loop = {
+                      needs = [ "loop" ];
+                    };
+                  }
+                )
+              ];
+            };
+            ok = builtins.tryEval (builtins.deepSeq result.traits result);
+          in
+          ok.success;
+        expected = false;
       };
     };
 }

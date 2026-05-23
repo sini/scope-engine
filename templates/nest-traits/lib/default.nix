@@ -3,6 +3,7 @@
   engine,
   schemaLib,
   aspects,
+  genLib,
 }:
 let
   css = import ./css.nix;
@@ -35,17 +36,19 @@ in
     expandNeededBy
     applySynth
     deepMerge
-    matchesNeededByEntry
     ;
   inherit css;
   selectors = selectorsLib.constructors;
   inherit
     (import ./setup.nix {
-      inherit lib schemaLib aspects;
+      inherit lib schemaLib aspects selectorsLib;
     })
     traitKind
     mkTraitRegistry
     mkRulesType
     evalNestModules
+    buildTraitNodes
+    resolveSelector
+    isSelector
     ;
 }
