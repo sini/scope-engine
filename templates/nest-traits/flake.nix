@@ -33,6 +33,7 @@
           engine
           schemaLib
           aspects
+          genLib
           ;
       };
     in

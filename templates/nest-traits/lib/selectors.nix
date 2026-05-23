@@ -96,7 +96,7 @@ let
       matchesOne node (css.parseCssSel sel) ctx
     else if sel ? __sel then
       matchesSel node sel ctx
-    else if sel ? name && sel ? needs then
+    else if sel ? nodeId || (sel ? name && sel ? needs) then
       builtins.any (t: t.name == sel.name) node.is
     else
       false;

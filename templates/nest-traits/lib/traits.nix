@@ -5,7 +5,6 @@
 }:
 let
   inherit (selectorsLib) matchesOne mkCtx firstMatch;
-  css = import ./css.nix;
 
   expandTraits =
     traitList:
@@ -22,52 +21,29 @@ let
           if builtins.any (s: s.name == t.name) seen then
             go seen rest
           else
-            let
-              needed = map (
-                n:
-                if builtins.isString n then throw "nest: unresolved trait ref '${n}' in needs of '${t.name}'" else n
-              ) (t.needs or [ ]);
-            in
-            go (seen ++ [ t ]) (rest ++ needed);
+            go (seen ++ [ t ]) (rest ++ (t.needs or [ ]));
     in
     go [ ] traitList;
 
-  matchesNeededByEntry =
-    traits: entry: node: ctx:
-    if entry ? name && entry ? needs then
-      builtins.any (t: t.name == entry.name) node.is
-    else if builtins.isString entry then
-      if traits ? ${entry} then
-        builtins.any (t: t.name == entry) node.is
-      else
-        matchesOne node (css.parseCssSel entry) ctx
-    else
-      matchesOne node entry ctx;
-
   expandNeededBy =
-    traits: nodeIs: nodeAttrs: allNodes:
+    traits: nodeIs:
     let
-      allTraitNames = builtins.attrNames traits;
+      allTraitInstances = builtins.attrValues traits;
       go =
         nodeIsAcc:
         let
-          virtualNode = nodeAttrs // {
-            is = nodeIsAcc;
-          };
-          ctx = mkCtx virtualNode allNodes;
+          nodeNames = map (t: t.name) nodeIsAcc;
           extras = builtins.filter (
-            name:
-            let
-              t = traits.${name};
-              nb = t.neededBy or [ ];
-            in
-            nb != [ ]
-            && !(builtins.any (s: s.name == name) nodeIsAcc)
-            && builtins.any (entry: matchesNeededByEntry traits entry virtualNode ctx) nb
-          ) allTraitNames;
-          extraInstances = map (name: traits.${name}) extras;
+            t:
+            (t.neededBy or [ ]) != [ ]
+            && !(builtins.elem t.name nodeNames)
+            && builtins.any (nb: builtins.elem nb.name nodeNames) (t.neededBy or [ ])
+          ) allTraitInstances;
         in
-        if extras == [ ] then nodeIsAcc else go (expandTraits (nodeIsAcc ++ extraInstances));
+        if extras == [ ] then
+          nodeIsAcc
+        else
+          go (expandTraits (nodeIsAcc ++ extras));
     in
     go nodeIs;
 
@@ -113,7 +89,7 @@ let
         let
           childIs = map (x: if builtins.isString x then traits.${x} else x) (child.is or [ ]);
           expandedIs = expandTraits childIs;
-          fullIs = expandNeededBy traits expandedIs (builtins.removeAttrs child [ "is" ]) refNodes;
+          fullIs = expandNeededBy traits expandedIs;
         in
         child
         // {
@@ -133,6 +109,5 @@ in
     expandNeededBy
     applySynth
     deepMerge
-    matchesNeededByEntry
     ;
 }

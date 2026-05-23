@@ -53,7 +53,7 @@ let
         n:
         let
           expandedIs = expandTraits n.is;
-          fullIs = expandNeededBy traits expandedIs (builtins.removeAttrs n [ "is" ]) resolvedNodes;
+          fullIs = expandNeededBy traits expandedIs;
         in
         n // { is = fullIs; }
       ) resolvedNodes;
