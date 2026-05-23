@@ -1483,5 +1483,59 @@
           ok.success;
         expected = false;
       };
+
+      test-self-neededby-validator = {
+        expr =
+          let
+            result = nest.evalNestModules {
+              modules = [
+                (
+                  { config, ... }:
+                  {
+                    config.traits.loop = {
+                      neededBy = [ "loop" ];
+                    };
+                  }
+                )
+              ];
+            };
+            ok = builtins.tryEval (builtins.deepSeq result.traits result);
+          in
+          ok.success;
+        expected = false;
+      };
+
+      test-nested-trait-structural-selector = {
+        expr =
+          let
+            result = nest.evalNestModules {
+              modules = [
+                (
+                  { config, ... }:
+                  {
+                    config.traits.web = { };
+                    config.traits.api = { };
+                    config.traits.server = {
+                      # server needs traits that have a sub-trait with nodeId
+                      # For now, test flat selector matching on attrs
+                      needs = [
+                        (nest.selectors.attrs { category = "frontend"; })
+                      ];
+                      category = "backend";
+                    };
+                    config.traits.nginx = {
+                      category = "frontend";
+                    };
+                    config.traits.caddy = {
+                      category = "frontend";
+                    };
+                  }
+                )
+              ];
+            };
+          in
+          builtins.sort builtins.lessThan (map (t: t.name) result.traits.server.needs);
+        expected = [ "caddy" "nginx" ];
+      };
     };
 }
