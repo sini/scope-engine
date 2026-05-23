@@ -41,7 +41,12 @@ in
   selectors = selectorsLib.constructors;
   inherit
     (import ./setup.nix {
-      inherit lib schemaLib aspects selectorsLib;
+      inherit
+        lib
+        schemaLib
+        aspects
+        selectorsLib
+        ;
     })
     traitKind
     mkTraitRegistry
