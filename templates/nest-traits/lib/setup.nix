@@ -37,9 +37,7 @@ let
               __parentPath = parentPath;
               is = [ ];
             };
-            candidateKeys = builtins.filter (
-              k: !(builtins.elem k knownOptionKeys)
-            ) (builtins.attrNames t);
+            candidateKeys = builtins.filter (k: !(builtins.elem k knownOptionKeys)) (builtins.attrNames t);
             subTraitNames = builtins.filter (
               k:
               let
@@ -64,46 +62,14 @@ let
     in
     map (t: traits.${t.name}) matches;
 
-  # Resolve a single raw ref value against the trait registry.
-  # Returns a list (for concatMap): selectors expand to multiple, others to singleton.
-  resolveRef =
-    registry: v:
-    if isSelector v then
-      resolveSelector registry v
-    else if builtins.isString v then
-      if registry ? ${v} then
-        [ registry.${v} ]
-      else
-        throw "nest: trait ref '${v}' not found (available: ${builtins.concatStringsSep ", " (builtins.attrNames registry)})"
-    else
-      [ v ];
-
-  # Deduplicate trait instances by name (first-seen wins).
-  dedupByName =
-    vals:
-    let
-      step =
-        seen: xs:
-        if xs == [ ] then
-          [ ]
-        else
-          let
-            h = builtins.head xs;
-            k = h.name;
-            t = builtins.tail xs;
-          in
-          if seen ? ${k} then step seen t else [ h ] ++ step (seen // { ${k} = true; }) t;
-    in
-    step { } vals;
-
   traitKind = {
     options.needs = lib.mkOption {
-      type = lib.types.listOf lib.types.raw;
+      type = schemaLib.setOf (schemaLib.ref "trait");
       default = [ ];
       description = "Forward dependencies: trait refs, selectors, or strings (resolved at eval time).";
     };
     options.neededBy = lib.mkOption {
-      type = lib.types.listOf lib.types.raw;
+      type = schemaLib.setOf (schemaLib.ref "trait");
       default = [ ];
       description = "Reverse injection: trait refs, selectors, or strings (resolved at eval time).";
     };
@@ -119,50 +85,21 @@ let
     };
   };
 
-  # Post-evaluation derivation: resolves refs and selectors in needs/neededBy,
-  # deduplicates, then validates. Runs after all instances are evaluated
-  # (inside applyPipeline), breaking the cycle that refs-at-eval-time would cause.
-  # Validation runs here (post-resolve) rather than in schema validators
-  # (which fire pre-derive on unresolved values).
-  mkTraitDerive =
-    instances:
-    let
-      # Resolve refs and selectors, deduplicate by name
-      resolve = field: instance:
-        let
-          raw = instance.${field} or [ ];
-          resolved = builtins.concatMap (resolveRef instances) raw;
-        in
-        dedupByName resolved;
-
-      derived = lib.mapAttrs (
-        _name: instance:
-        {
-          needs = resolve "needs" instance;
-          neededBy = resolve "neededBy" instance;
-        }
-      ) instances;
-
-      # Post-resolve validation
-      validate = name: instance:
-        let
-          resolvedNeeds = derived.${name}.needs;
-          resolvedNeededBy = derived.${name}.neededBy;
-        in
-        if builtins.any (n: n.name == name) resolvedNeeds then
-          throw "nest: trait '${name}' cannot need itself"
-        else if builtins.any (n: n.name == name) resolvedNeededBy then
-          throw "nest: trait '${name}' cannot inject into itself"
-        else
-          derived.${name};
-    in
-    lib.mapAttrs validate instances;
-
   mkTraitRegistry =
-    schema: _traitsSelf:
+    schema: traitsSelf:
+    let
+      coerceHook = {
+        instances = traitsSelf;
+        deferred = true;
+        coerce = default: val: if isSelector val then resolveSelector traitsSelf val else default;
+      };
+    in
     schemaLib.mkInstanceRegistry schema "trait" {
       strict = false;
-      derive = mkTraitDerive;
+      refs = {
+        needs = coerceHook;
+        neededBy = coerceHook;
+      };
     };
 
   mkRulesType =
@@ -183,6 +120,37 @@ let
         }
       ];
     };
+
+  # Lazy per-trait validation: only fires when the validated trait is accessed.
+  # Runs outside applyPipeline to avoid circular evaluation with deferred coerce.
+  validateTraits =
+    traits:
+    lib.mapAttrs (
+      name: instance:
+      let
+        checkNeeds =
+          let
+            resolved = instance.needs or [ ];
+          in
+          if builtins.any (n: n.name == name) resolved then
+            throw "nest: trait '${name}' cannot need itself"
+          else
+            resolved;
+        checkNeededBy =
+          let
+            resolved = instance.neededBy or [ ];
+          in
+          if builtins.any (n: n.name == name) resolved then
+            throw "nest: trait '${name}' cannot inject into itself"
+          else
+            resolved;
+      in
+      instance
+      // {
+        needs = checkNeeds;
+        neededBy = checkNeededBy;
+      }
+    ) traits;
 
   evalNestModules =
     {
@@ -212,7 +180,7 @@ let
       };
     in
     {
-      traits = eval.config.traits;
+      traits = validateTraits eval.config.traits;
       rules = eval.config.rules;
       schema = eval.config.schema;
     };
