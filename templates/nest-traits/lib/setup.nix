@@ -83,6 +83,16 @@ let
       default = { };
       description = "Output class builders. { className = select: modules: value; }";
     };
+    validators = [
+      (schemaLib.mkValidator "no-self-need"
+        ({ name, needs, ... }: !builtins.any (n: n.name == name) needs)
+        "trait cannot need itself"
+      )
+      (schemaLib.mkValidator "no-self-neededby"
+        ({ name, neededBy, ... }: !builtins.any (n: n.name == name) neededBy)
+        "trait cannot inject into itself"
+      )
+    ];
   };
 
   mkTraitRegistry =
@@ -91,7 +101,7 @@ let
       coerceHook = {
         instances = traitsSelf;
         deferred = true;
-        coerce = default: val: if isSelector val then resolveSelector traitsSelf val else default;
+        coerce = registry: default: val: if isSelector val then resolveSelector registry val else default;
       };
     in
     schemaLib.mkInstanceRegistry schema "trait" {
@@ -121,37 +131,6 @@ let
       ];
     };
 
-  # Lazy per-trait validation: only fires when the validated trait is accessed.
-  # Runs outside applyPipeline to avoid circular evaluation with deferred coerce.
-  validateTraits =
-    traits:
-    lib.mapAttrs (
-      name: instance:
-      let
-        checkNeeds =
-          let
-            resolved = instance.needs or [ ];
-          in
-          if builtins.any (n: n.name == name) resolved then
-            throw "nest: trait '${name}' cannot need itself"
-          else
-            resolved;
-        checkNeededBy =
-          let
-            resolved = instance.neededBy or [ ];
-          in
-          if builtins.any (n: n.name == name) resolved then
-            throw "nest: trait '${name}' cannot inject into itself"
-          else
-            resolved;
-      in
-      instance
-      // {
-        needs = checkNeeds;
-        neededBy = checkNeededBy;
-      }
-    ) traits;
-
   evalNestModules =
     {
       modules,
@@ -180,7 +159,7 @@ let
       };
     in
     {
-      traits = validateTraits eval.config.traits;
+      traits = eval.config.traits;
       rules = eval.config.rules;
       schema = eval.config.schema;
     };
