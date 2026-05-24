@@ -84,14 +84,24 @@ let
       description = "Output class builders. { className = select: modules: value; }";
     };
     validators = [
-      (schemaLib.mkValidator "no-self-need"
-        ({ name, needs, ... }: !builtins.any (n: n.name == name) needs)
-        "trait cannot need itself"
-      )
-      (schemaLib.mkValidator "no-self-neededby"
-        ({ name, neededBy, ... }: !builtins.any (n: n.name == name) neededBy)
-        "trait cannot inject into itself"
-      )
+      (schemaLib.mkFieldValidator {
+        name = "no-self-need";
+        fields = [
+          "name"
+          "needs"
+        ];
+        check = { name, needs, ... }: !builtins.any (n: n.name == name) needs;
+        message = "trait cannot need itself";
+      })
+      (schemaLib.mkFieldValidator {
+        name = "no-self-neededby";
+        fields = [
+          "name"
+          "neededBy"
+        ];
+        check = { name, neededBy, ... }: !builtins.any (n: n.name == name) neededBy;
+        message = "trait cannot inject into itself";
+      })
     ];
   };
 
@@ -101,11 +111,21 @@ let
       coerceHook = {
         instances = traitsSelf;
         deferred = true;
-        coerce = registry: default: val: if isSelector val then resolveSelector registry val else default;
+        coerce =
+          registry: default: val:
+          if isSelector val then resolveSelector registry val else default;
       };
     in
     schemaLib.mkInstanceRegistry schema "trait" {
       strict = false;
+      refinements = {
+        name = [
+          {
+            check = v: !(lib.hasPrefix "_" v);
+            message = "trait name must not start with underscore (reserved for internal use)";
+          }
+        ];
+      };
       refs = {
         needs = coerceHook;
         neededBy = coerceHook;

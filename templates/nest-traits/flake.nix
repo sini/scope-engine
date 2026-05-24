@@ -5,6 +5,7 @@
     gen-schema.url = "github:sini/gen-schema";
     gen-aspects.url = "github:sini/gen-aspects";
     gen.url = "github:sini/gen";
+    gen-graph.url = "github:sini/gen-graph";
     nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
   };
   outputs =
@@ -13,6 +14,7 @@
       gen-schema,
       gen-aspects,
       gen,
+      gen-graph,
       nixpkgs,
       ...
     }:
@@ -27,6 +29,10 @@
         };
       };
       aspects = gen-aspects { inherit lib; };
+      graphLib = gen-graph {
+        inherit lib;
+        engine = engine;
+      };
       nest = import ./lib {
         inherit
           lib
@@ -47,6 +53,7 @@
           schemaLib
           aspects
           genLib
+          graphLib
           ;
       };
     };

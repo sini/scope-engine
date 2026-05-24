@@ -1,6 +1,6 @@
 # Nest Traits
 
-Nest's CSS-inspired traits model rebuilt on scope-engine, gen-schema, and gen-aspects. Demonstrates that nest's evaluation engine decomposes cleanly into three independent libraries, each handling one concern.
+Nest's CSS-inspired traits model rebuilt on scope-engine, gen-schema, gen-aspects, and gen-graph. Demonstrates that nest's evaluation engine decomposes cleanly into independent libraries, each handling one concern.
 
 ## What it demonstrates
 
@@ -45,9 +45,10 @@ Each library handles one concern:
 
 | Layer | Library | Role |
 |---|---|---|
-| **Type definitions** | gen-schema | Trait sidecars (`needs`, `neededBy`, `synth`, `class`), node instance registry, ref validation |
+| **Type definitions** | gen-schema | Trait sidecars (`needs`, `neededBy`, `synth`, `class`), node instance registry, ref validation, refinement contracts |
 | **Rule content** | gen-aspects | Class-separated `deferredModule` output via `aspectsType`, `is` selector injected via `aspectModules` |
 | **Graph evaluation** | scope-engine | DOM hierarchy as parent edges, structural queries (`childrenIds`, `ancestors`, `siblings`), `buildNodes` for graph construction |
+| **Graph queries** | gen-graph | Monotonic query combinators over scope graphs: `select`, `reachableFrom`, `dependents`, `cycles`, `leaves` |
 
 Template-local code provides the CSS selector engine and the 5-phase evaluation pipeline.
 
@@ -102,7 +103,7 @@ Selectors can be trait references, programmatic constructors, or CSS strings —
 
 ```
 templates/nest-traits/
-├── flake.nix              # inputs: scope-engine, gen-schema, gen-aspects, gen, nixpkgs
+├── flake.nix              # inputs: scope-engine, gen-schema, gen-aspects, gen, gen-graph, nixpkgs
 ├── lib/
 │   ├── default.nix        # public API: evalNest, selectors, walkDom, trait helpers
 │   ├── engine.nix         # 5-phase evaluation pipeline
@@ -111,7 +112,7 @@ templates/nest-traits/
 │   ├── dom.nix            # DOM traversal (walkDom) + scope-engine graph (buildDomGraph)
 │   ├── traits.nix         # trait expansion (expandTraits, expandNeededBy, applySynth)
 │   └── setup.nix          # gen-schema/gen-aspects integration helpers
-└── tests.nix              # 76 tests across 8 suites
+└── tests.nix              # 88 tests across 9 suites
 ```
 
 ## Defining traits
@@ -180,7 +181,7 @@ Class-keyed values are collected as lists (not deep-merged) to preserve NixOS mo
 
 ## Tests
 
-76 tests across 8 suites:
+86+ tests across 9 suites:
 
 | Suite | Tests | What it covers |
 |---|---|---|
@@ -192,7 +193,8 @@ Class-keyed values are collected as lists (not deep-merged) to preserve NixOS mo
 | `engine-tests` | 10 | Full pipeline: basic output, byClass, rule matching, needs/neededBy in pipeline, list collection, `:has` selector, child bubbling, rule synth |
 | `demo` | 9 | Fleet scenario: lb + web nodes + users, cross-node select, sudo via `:has(admin)`, neededBy monitoring |
 | `edge-cases` | 5 | Empty DOM, marker-only traits, CSS selectors in rules, deep nesting, multiple same-level nodes |
-| `setup-tests` | 4 | traitKind, mkRulesType, evalNestModules, schema integration |
+| `setup-tests` | 13 | traitKind, mkRulesType, evalNestModules, schema integration, refinement contracts, mkFieldValidator |
+| `graph-queries` | 8 | gen-graph queries: node selection, edge counting, import-graph reachability, cycle detection |
 
 ```bash
 nix run github:nix-community/nix-unit -- --flake .#tests
@@ -216,3 +218,4 @@ Key differences from nest:
 - [scope-engine](https://github.com/sini/scope-engine) — demand-driven HOAG evaluator over algebraic scope graphs
 - [gen-schema](https://github.com/sini/gen-schema) — typed record registries with sidecars, refs, and validation
 - [gen-aspects](https://github.com/sini/gen-aspects) — aspect-oriented composition types (Palmer flat dispatch)
+- [gen-graph](https://github.com/sini/gen-graph) — monotonic query combinators over scope graphs

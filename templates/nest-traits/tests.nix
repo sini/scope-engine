@@ -5,6 +5,7 @@
   schemaLib,
   aspects,
   genLib,
+  graphLib,
 }:
 {
   smoke = {
@@ -1318,224 +1319,467 @@
       };
     };
 
-  setup-tests =
-    {
-      test-trait-kind-has-options = {
-        expr =
-          nest.traitKind ? options;
-        expected = true;
-      };
+  setup-tests = {
+    test-trait-kind-has-options = {
+      expr = nest.traitKind ? options;
+      expected = true;
+    };
 
-      test-mk-rules-type = {
-        expr =
-          let
-            rulesType = nest.mkRulesType { };
-          in
-          rulesType ? name;
-        expected = true;
-      };
+    test-mk-rules-type = {
+      expr =
+        let
+          rulesType = nest.mkRulesType { };
+        in
+        rulesType ? name;
+      expected = true;
+    };
 
-      test-eval-nest-modules = {
-        expr =
-          let
-            result = nest.evalNestModules {
-              modules = [ ];
-            };
-          in
-          result ? schema && result ? rules;
-        expected = true;
-      };
+    test-eval-nest-modules = {
+      expr =
+        let
+          result = nest.evalNestModules {
+            modules = [ ];
+          };
+        in
+        result ? schema && result ? rules;
+      expected = true;
+    };
 
-      test-eval-nest-modules-with-schema = {
-        expr =
-          let
-            result = nest.evalNestModules {
-              modules = [
+    test-eval-nest-modules-with-schema = {
+      expr =
+        let
+          result = nest.evalNestModules {
+            modules = [
+              {
+                schema.host = {
+                  class = {
+                    nixos = _: _: null;
+                  };
+                };
+              }
+            ];
+          };
+        in
+        result.schema ? host;
+      expected = true;
+    };
+
+    test-needs-selector-resolution = {
+      expr =
+        let
+          result = nest.evalNestModules {
+            modules = [
+              (
+                { config, ... }:
                 {
-                  schema.host = {
-                    class = {
-                      nixos = _: _: null;
-                    };
+                  config.traits.ssh = {
+                    category = "security";
+                  };
+                  config.traits.firewall = {
+                    category = "security";
+                  };
+                  config.traits.nginx = {
+                    category = "web";
+                  };
+                  config.traits.server = {
+                    needs = [
+                      (nest.selectors.attrs { category = "security"; })
+                    ];
                   };
                 }
-              ];
-            };
-          in
-          result.schema ? host;
-        expected = true;
+              )
+            ];
+          };
+        in
+        builtins.sort builtins.lessThan (map (t: t.name) result.traits.server.needs);
+      expected = [
+        "firewall"
+        "ssh"
+      ];
+    };
+
+    test-neededby-selector-resolution = {
+      expr =
+        let
+          result = nest.evalNestModules {
+            modules = [
+              (
+                { config, ... }:
+                {
+                  config.traits.host = {
+                    class.nixos = _: _: null;
+                  };
+                  config.traits.server = { };
+                  config.traits.monitoring = {
+                    neededBy = [ "server" ];
+                  };
+                }
+              )
+            ];
+          };
+        in
+        builtins.length result.traits.monitoring.neededBy > 0
+        && (builtins.head result.traits.monitoring.neededBy).name == "server";
+      expected = true;
+    };
+
+    test-setof-dedup = {
+      expr =
+        let
+          result = nest.evalNestModules {
+            modules = [
+              (
+                { config, ... }:
+                {
+                  config.traits.ssh = {
+                    category = "security";
+                  };
+                  config.traits.server = {
+                    needs = [
+                      "ssh"
+                      (nest.selectors.attrs { category = "security"; })
+                    ];
+                  };
+                }
+              )
+            ];
+          };
+        in
+        builtins.length result.traits.server.needs;
+      expected = 1;
+    };
+
+    test-trait-attrs-matchable = {
+      expr =
+        let
+          result = nest.evalNestModules {
+            modules = [
+              (
+                { config, ... }:
+                {
+                  config.traits.ssh = {
+                    category = "security";
+                    port = 22;
+                  };
+                  config.traits.http = {
+                    category = "web";
+                    port = 80;
+                  };
+                  config.traits.server = {
+                    needs = [
+                      (nest.selectors.attrs { category = "security"; })
+                    ];
+                  };
+                }
+              )
+            ];
+          };
+        in
+        map (t: t.name) result.traits.server.needs;
+      expected = [ "ssh" ];
+    };
+
+    test-self-need-validator = {
+      expr =
+        let
+          result = nest.evalNestModules {
+            modules = [
+              (
+                { config, ... }:
+                {
+                  config.traits.loop = {
+                    needs = [ "loop" ];
+                  };
+                }
+              )
+            ];
+          };
+          ok = builtins.tryEval (builtins.deepSeq result.traits result);
+        in
+        ok.success;
+      expected = false;
+    };
+
+    test-self-neededby-validator = {
+      expr =
+        let
+          result = nest.evalNestModules {
+            modules = [
+              (
+                { config, ... }:
+                {
+                  config.traits.loop = {
+                    neededBy = [ "loop" ];
+                  };
+                }
+              )
+            ];
+          };
+          ok = builtins.tryEval (builtins.deepSeq result.traits result);
+        in
+        ok.success;
+      expected = false;
+    };
+
+    test-nested-trait-structural-selector = {
+      expr =
+        let
+          result = nest.evalNestModules {
+            modules = [
+              (
+                { config, ... }:
+                {
+                  config.traits.web = { };
+                  config.traits.api = { };
+                  config.traits.server = {
+                    # server needs traits that have a sub-trait with nodeId
+                    # For now, test flat selector matching on attrs
+                    needs = [
+                      (nest.selectors.attrs { category = "frontend"; })
+                    ];
+                    category = "backend";
+                  };
+                  config.traits.nginx = {
+                    category = "frontend";
+                  };
+                  config.traits.caddy = {
+                    category = "frontend";
+                  };
+                }
+              )
+            ];
+          };
+        in
+        builtins.sort builtins.lessThan (map (t: t.name) result.traits.server.needs);
+      expected = [
+        "caddy"
+        "nginx"
+      ];
+    };
+
+    test-refinement-rejects-underscore-name = {
+      expr =
+        let
+          result = nest.evalNestModules {
+            modules = [
+              (
+                { config, ... }:
+                {
+                  config.traits._internal = { };
+                }
+              )
+            ];
+          };
+          ok = builtins.tryEval (builtins.deepSeq result.traits result);
+        in
+        ok.success;
+      expected = false;
+    };
+
+    test-refinement-allows-normal-name = {
+      expr =
+        let
+          result = nest.evalNestModules {
+            modules = [
+              (
+                { config, ... }:
+                {
+                  config.traits.server = { };
+                }
+              )
+            ];
+          };
+          ok = builtins.tryEval (builtins.deepSeq result.traits result);
+        in
+        ok.success;
+      expected = true;
+    };
+  };
+
+  graph-queries =
+    let
+      inherit (nest) walkDom buildDomGraph;
+      hostT = {
+        name = "host";
+        needs = [ ];
+        neededBy = [ ];
+        synth = [ ];
+        class.nixos = _: _: null;
+      };
+      serverT = {
+        name = "server";
+        needs = [ ];
+        neededBy = [ ];
+        synth = [ ];
+        class = { };
+      };
+      webT = {
+        name = "web";
+        needs = [ ];
+        neededBy = [ ];
+        synth = [ ];
+        class = { };
+      };
+      lbT = {
+        name = "lb";
+        needs = [ ];
+        neededBy = [ ];
+        synth = [ ];
+        class = { };
+      };
+      domNodes = walkDom {
+        prod = {
+          env = "production";
+          lb = {
+            is = [
+              hostT
+              lbT
+              serverT
+            ];
+          };
+          web-1 = {
+            is = [
+              hostT
+              webT
+              serverT
+            ];
+          };
+          web-2 = {
+            is = [
+              hostT
+              webT
+              serverT
+            ];
+          };
+        };
+      };
+      nodes = buildDomGraph domNodes;
+    in
+    {
+      test-node-count = {
+        expr = graphLib.sizeNodes nodes;
+        expected = 3;
       };
 
-      test-needs-selector-resolution = {
+      test-select-web-nodes = {
         expr =
           let
-            result = nest.evalNestModules {
-              modules = [
-                (
-                  { config, ... }:
-                  {
-                    config.traits.ssh = { category = "security"; };
-                    config.traits.firewall = { category = "security"; };
-                    config.traits.nginx = { category = "web"; };
-                    config.traits.server = {
-                      needs = [
-                        (nest.selectors.attrs { category = "security"; })
-                      ];
-                    };
-                  }
-                )
-              ];
-            };
+            webNodes = graphLib.select nodes (
+              node: builtins.any (t: t.name == "web") (node.rels.":".is or [ ])
+            );
           in
-          builtins.sort builtins.lessThan (map (t: t.name) result.traits.server.needs);
-        expected = [ "firewall" "ssh" ];
+          builtins.sort builtins.lessThan (builtins.attrNames webNodes);
+        expected = [
+          "prod.web-1"
+          "prod.web-2"
+        ];
       };
 
-      test-neededby-selector-resolution = {
+      test-select-lb-node = {
         expr =
           let
-            result = nest.evalNestModules {
-              modules = [
-                (
-                  { config, ... }:
-                  {
-                    config.traits.host = {
-                      class.nixos = _: _: null;
-                    };
-                    config.traits.server = { };
-                    config.traits.monitoring = {
-                      neededBy = [ "server" ];
-                    };
-                  }
-                )
-              ];
-            };
+            lbNodes = graphLib.select nodes (node: builtins.any (t: t.name == "lb") (node.rels.":".is or [ ]));
           in
-          builtins.length result.traits.monitoring.neededBy > 0
-          && (builtins.head result.traits.monitoring.neededBy).name == "server";
-        expected = true;
+          builtins.attrNames lbNodes;
+        expected = [ "prod.lb" ];
       };
 
-      test-setof-dedup = {
+      test-all-nodes-are-leaves = {
+        # DOM graph uses namespace folders (no `is`), so nodes at the same
+        # level have no parent edges between them. gen-graph's leaves/roots
+        # operate on import edges; with none present, all nodes are leaves.
+        expr = builtins.sort builtins.lessThan (graphLib.leaves nodes);
+        expected = [
+          "prod.lb"
+          "prod.web-1"
+          "prod.web-2"
+        ];
+      };
+
+      test-no-cycles = {
+        expr = graphLib.cycles nodes;
+        expected = [ ];
+      };
+
+      test-parent-edges-in-nested-dom = {
+        # Nested nodes (child inside parent with `is`) produce parent edges.
         expr =
           let
-            result = nest.evalNestModules {
-              modules = [
-                (
-                  { config, ... }:
-                  {
-                    config.traits.ssh = { category = "security"; };
-                    config.traits.server = {
-                      needs = [
-                        "ssh"
-                        (nest.selectors.attrs { category = "security"; })
-                      ];
-                    };
-                  }
-                )
-              ];
+            userT = {
+              name = "user";
+              needs = [ ];
+              neededBy = [ ];
+              synth = [ ];
+              class = { };
             };
+            nestedNodes = walkDom {
+              igloo = {
+                is = [ hostT ];
+                users.tux = {
+                  is = [ userT ];
+                };
+              };
+            };
+            nestedGraph = buildDomGraph nestedNodes;
+            edgeSet = graphLib.fromEdges nestedGraph;
+            pEdges = graphLib.selectEdges edgeSet (e: e.label == "P");
           in
-          builtins.length result.traits.server.needs;
+          graphLib.sizeEdges pEdges;
         expected = 1;
       };
 
-      test-trait-attrs-matchable = {
+      test-flat-dom-no-parent-edges = {
+        # Namespace folders don't create nodes, so sibling nodes under
+        # a namespace have no parent edges between them.
         expr =
           let
-            result = nest.evalNestModules {
-              modules = [
-                (
-                  { config, ... }:
-                  {
-                    config.traits.ssh = { category = "security"; port = 22; };
-                    config.traits.http = { category = "web"; port = 80; };
-                    config.traits.server = {
-                      needs = [
-                        (nest.selectors.attrs { category = "security"; })
-                      ];
-                    };
-                  }
-                )
-              ];
-            };
+            edgeSet = graphLib.fromEdges nodes;
           in
-          map (t: t.name) result.traits.server.needs;
-        expected = [ "ssh" ];
+          graphLib.sizeEdges edgeSet;
+        expected = 0;
       };
 
-      test-self-need-validator = {
+      test-import-graph-reachable = {
+        # Construct a graph with import edges to demonstrate reachableFrom.
+        # lb imports web-1 and web-2 (lb depends on web backends).
         expr =
           let
-            result = nest.evalNestModules {
-              modules = [
-                (
-                  { config, ... }:
-                  {
-                    config.traits.loop = {
-                      needs = [ "loop" ];
-                    };
-                  }
-                )
+            importNodes = engine.buildNodes {
+              importGraph = engine.overlays [
+                (engine.vertices [
+                  "lb"
+                  "web-1"
+                  "web-2"
+                ])
+                (engine.edge "lb" "web-1")
+                (engine.edge "lb" "web-2")
               ];
             };
-            ok = builtins.tryEval (builtins.deepSeq result.traits result);
           in
-          ok.success;
-        expected = false;
+          builtins.sort builtins.lessThan (graphLib.reachableFrom importNodes "lb");
+        expected = [
+          "web-1"
+          "web-2"
+        ];
       };
 
-      test-self-neededby-validator = {
+      test-import-graph-dependents = {
         expr =
           let
-            result = nest.evalNestModules {
-              modules = [
-                (
-                  { config, ... }:
-                  {
-                    config.traits.loop = {
-                      neededBy = [ "loop" ];
-                    };
-                  }
-                )
-              ];
-            };
-            ok = builtins.tryEval (builtins.deepSeq result.traits result);
-          in
-          ok.success;
-        expected = false;
-      };
-
-      test-nested-trait-structural-selector = {
-        expr =
-          let
-            result = nest.evalNestModules {
-              modules = [
-                (
-                  { config, ... }:
-                  {
-                    config.traits.web = { };
-                    config.traits.api = { };
-                    config.traits.server = {
-                      # server needs traits that have a sub-trait with nodeId
-                      # For now, test flat selector matching on attrs
-                      needs = [
-                        (nest.selectors.attrs { category = "frontend"; })
-                      ];
-                      category = "backend";
-                    };
-                    config.traits.nginx = {
-                      category = "frontend";
-                    };
-                    config.traits.caddy = {
-                      category = "frontend";
-                    };
-                  }
-                )
+            importNodes = engine.buildNodes {
+              importGraph = engine.overlays [
+                (engine.vertices [
+                  "lb"
+                  "web-1"
+                  "web-2"
+                ])
+                (engine.edge "lb" "web-1")
+                (engine.edge "lb" "web-2")
               ];
             };
           in
-          builtins.sort builtins.lessThan (map (t: t.name) result.traits.server.needs);
-        expected = [ "caddy" "nginx" ];
+          graphLib.dependents importNodes "web-1";
+        expected = [ "lb" ];
       };
     };
 }
