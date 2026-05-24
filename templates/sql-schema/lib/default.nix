@@ -16,6 +16,9 @@ let
 
   instanceGraphInputs = schemaLib.buildInstanceGraph evaluated.schema evaluated.fleet;
   instanceNodes = engine.buildNodes instanceGraphInputs;
+
+  # SQL parser
+  sqlParser = import ./sql.nix { inherit lib; };
 in
 {
   inherit (schemaModule) refinements validators;
@@ -37,4 +40,7 @@ in
   reachableFrom = graphLib.reachableFrom instanceNodes;
   dependents = graphLib.dependents instanceNodes;
   impactOf = graphLib.impactOf instanceNodes;
+
+  # SQL parser
+  inherit (sqlParser) parseSql tokenize;
 }

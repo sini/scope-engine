@@ -368,4 +368,182 @@ in
       expected = true;
     };
   };
+
+  sql-parser =
+    let
+      inherit (sql) parseSql;
+    in
+    {
+      test-simple-select = {
+        expr =
+          let ast = parseSql "SELECT hostname FROM servers";
+          in {
+            cols = ast.select;
+            kind = ast.from.kind;
+          };
+        expected = {
+          cols = [ { column = "hostname"; table = null; } ];
+          kind = "servers";
+        };
+      };
+
+      test-select-star = {
+        expr =
+          let ast = parseSql "SELECT * FROM servers";
+          in ast.select;
+        expected = [ { column = "*"; table = null; } ];
+      };
+
+      test-select-with-alias = {
+        expr =
+          let ast = parseSql "SELECT s.hostname, s.os FROM servers s";
+          in {
+            cols = ast.select;
+            alias = ast.from.alias;
+          };
+        expected = {
+          cols = [
+            { table = "s"; column = "hostname"; }
+            { table = "s"; column = "os"; }
+          ];
+          alias = "s";
+        };
+      };
+
+      test-single-join = {
+        expr =
+          let ast = parseSql "SELECT s.hostname FROM servers s JOIN services svc ON svc.server = s.name";
+          in builtins.length ast.joins;
+        expected = 1;
+      };
+
+      test-join-details = {
+        expr =
+          let ast = parseSql "SELECT s.hostname FROM servers s JOIN services svc ON svc.server = s.name";
+              j = builtins.head ast.joins;
+          in {
+            kind = j.kind;
+            alias = j.alias;
+            isLeft = j.isLeft;
+            onLeft = j.on.left;
+            onRight = j.on.right;
+          };
+        expected = {
+          kind = "services";
+          alias = "svc";
+          isLeft = false;
+          onLeft = { table = "svc"; column = "server"; };
+          onRight = { table = "s"; column = "name"; };
+        };
+      };
+
+      test-multi-join = {
+        expr =
+          let ast = parseSql ''
+            SELECT s.hostname, svc.name, p.number
+            FROM servers s
+            JOIN services svc ON svc.server = s.name
+            JOIN ports p ON p.service = svc.name
+          '';
+          in builtins.length ast.joins;
+        expected = 2;
+      };
+
+      test-where-eq = {
+        expr =
+          let ast = parseSql "SELECT hostname FROM servers WHERE datacenter = 'us-east-1'";
+          in ast.where;
+        expected = {
+          op = "=";
+          left = { table = null; column = "datacenter"; };
+          right = "us-east-1";
+        };
+      };
+
+      test-where-and = {
+        expr =
+          let ast = parseSql "SELECT hostname FROM servers WHERE datacenter = 'us-east-1' AND environment = 'prod'";
+          in ast.where.op;
+        expected = "AND";
+      };
+
+      test-where-in = {
+        expr =
+          let ast = parseSql "SELECT hostname FROM servers WHERE datacenter IN ('us-east-1', 'eu-west-1')";
+          in ast.where;
+        expected = {
+          op = "IN";
+          left = { table = null; column = "datacenter"; };
+          right = [ "us-east-1" "eu-west-1" ];
+        };
+      };
+
+      test-where-is-null = {
+        expr =
+          let ast = parseSql "SELECT hostname FROM servers WHERE replaces IS NULL";
+          in ast.where;
+        expected = {
+          op = "IS NULL";
+          left = { table = null; column = "replaces"; };
+        };
+      };
+
+      test-where-is-not-null = {
+        expr =
+          let ast = parseSql "SELECT hostname FROM servers WHERE replaces IS NOT NULL";
+          in ast.where;
+        expected = {
+          op = "IS NOT NULL";
+          left = { table = null; column = "replaces"; };
+        };
+      };
+
+      test-order-by = {
+        expr =
+          let ast = parseSql "SELECT hostname FROM servers ORDER BY hostname";
+          in ast.orderBy;
+        expected = { table = null; column = "hostname"; };
+      };
+
+      test-limit = {
+        expr =
+          let ast = parseSql "SELECT hostname FROM servers LIMIT 10";
+          in ast.limit;
+        expected = 10;
+      };
+
+      test-left-join = {
+        expr =
+          let ast = parseSql "SELECT s.hostname FROM servers s LEFT JOIN services svc ON svc.server = s.name";
+              j = builtins.head ast.joins;
+          in j.isLeft;
+        expected = true;
+      };
+
+      test-full-query = {
+        expr =
+          let ast = parseSql ''
+            SELECT s.hostname, s.cores
+            FROM servers s
+            JOIN services svc ON svc.server = s.name
+            WHERE s.datacenter = 'us-east-1'
+            ORDER BY s.hostname
+            LIMIT 5
+          '';
+          in {
+            selectCount = builtins.length ast.select;
+            joinCount = builtins.length ast.joins;
+            hasWhere = ast.where != null;
+            hasOrderBy = ast.orderBy != null;
+            limit = ast.limit;
+          };
+        expected = {
+          selectCount = 2;
+          joinCount = 1;
+          hasWhere = true;
+          hasOrderBy = true;
+          limit = 5;
+        };
+      };
+    };
 }
