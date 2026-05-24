@@ -546,4 +546,126 @@ in
         };
       };
     };
+
+  sql-engine =
+    let
+      inherit (sql) query;
+    in
+    {
+      test-simple-select = {
+        expr =
+          let
+            rows = query "SELECT hostname, os FROM servers";
+          in
+          builtins.length rows;
+        expected = 4;
+      };
+
+      test-select-star = {
+        expr =
+          let
+            rows = query "SELECT * FROM servers";
+            r = builtins.head rows;
+          in
+          r ? hostname && r ? os && r ? cores;
+        expected = true;
+      };
+
+      test-where-filter = {
+        expr =
+          let
+            rows = query "SELECT hostname FROM servers WHERE datacenter = 'us-east-1'";
+          in
+          builtins.sort builtins.lessThan (map (r: r.hostname) rows);
+        expected = [ "db-1" "web-1" "web-2" ];
+      };
+
+      test-where-inequality = {
+        expr =
+          let
+            rows = query "SELECT hostname FROM servers WHERE datacenter != 'us-east-1'";
+          in
+          map (r: r.hostname) rows;
+        expected = [ "api-1" ];
+      };
+
+      test-single-join = {
+        expr =
+          let
+            rows = query ''
+              SELECT s.hostname, svc.name
+              FROM servers s
+              JOIN services svc ON svc.server = s.name
+            '';
+          in
+          builtins.sort builtins.lessThan (map (r: r.name) rows);
+        expected = [ "api" "nginx" "postgres" ];
+      };
+
+      test-where-with-join = {
+        expr =
+          let
+            rows = query ''
+              SELECT s.hostname, svc.name
+              FROM servers s
+              JOIN services svc ON svc.server = s.name
+              WHERE s.datacenter = 'us-east-1'
+            '';
+          in
+          builtins.sort builtins.lessThan (map (r: r.name) rows);
+        expected = [ "nginx" "postgres" ];
+      };
+
+      test-order-by = {
+        expr =
+          let
+            rows = query "SELECT hostname FROM servers ORDER BY hostname";
+          in
+          map (r: r.hostname) rows;
+        expected = [ "api-1" "db-1" "web-1" "web-2" ];
+      };
+
+      test-limit = {
+        expr =
+          let
+            rows = query "SELECT hostname FROM servers ORDER BY hostname LIMIT 2";
+          in
+          map (r: r.hostname) rows;
+        expected = [ "api-1" "db-1" ];
+      };
+
+      test-where-is-null = {
+        expr =
+          let
+            rows = query "SELECT hostname FROM servers WHERE replaces IS NULL";
+          in
+          builtins.length rows;
+        # web-1, db-1, api-1 have no replaces; web-2 has replaces = "web-1"
+        expected = 3;
+      };
+
+      test-where-is-not-null = {
+        expr =
+          let
+            rows = query "SELECT hostname FROM servers WHERE replaces IS NOT NULL";
+          in
+          map (r: r.hostname) rows;
+        expected = [ "web-2" ];
+      };
+
+      test-multi-join = {
+        expr =
+          let
+            rows = query ''
+              SELECT s.hostname, svc.name, p.number
+              FROM servers s
+              JOIN services svc ON svc.server = s.name
+              JOIN ports p ON p.service = svc.name
+              WHERE p.expose = true
+            '';
+          in
+          builtins.length rows > 0;
+        expected = true;
+      };
+    };
 }
