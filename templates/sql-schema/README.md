@@ -385,6 +385,42 @@ nixosQueries.serversInEnv configs "prod"
 # → { web-1 = ...; web-2 = ...; db-1 = ...; api-1 = ...; }
 ```
 
+**Generic config-path queries** — SELECT WHERE on any NixOS config property:
+
+```nix
+# "Show me all servers where the firewall has port 443 open"
+nixosQueries.serversWhere configs
+  [ "networking" "firewall" "allowedTCPPorts" ]
+  (ports: builtins.elem 443 ports)
+# → { web-1 = { ... }; }
+
+# "Which servers have cron jobs?"
+nixosQueries.serversWhere configs
+  [ "services" "cron" "systemCronJobs" ]
+  (jobs: jobs != [])
+# → { db-1 = { ... }; web-1 = { ... }; }
+
+# "Which servers have user alice?"
+nixosQueries.serversWhere configs
+  [ "users" "users" ]
+  (users: users ? alice)
+# → { db-1 = { ... }; web-1 = { ... }; }
+
+# "Which servers have the 'database' tag?"
+nixosQueries.serversWhere configs
+  [ "environment" "etc" "server-tags" "text" ]
+  (tags: lib.hasInfix "database" tags)
+# → { db-1 = { ... }; }
+
+# Extract specific values from matching configs
+nixosQueries.selectFromConfigs configs
+  (cfg: cfg.networking.hostName)
+  (hostname: configs.${hostname}.networking.firewall.allowedTCPPorts != [])
+# → { web-1 = "web-1"; api-1 = "api-1"; }
+```
+
+`serversWhere` takes a config path (list of attr names) and a predicate. It walks the path with `lib.attrByPath`, then applies the predicate. This lets you query any property in the evaluated NixOS configuration — firewall rules, users, services, environment variables, cron jobs, tags — without writing kind-specific query functions.
+
 ---
 
 ## Data Model

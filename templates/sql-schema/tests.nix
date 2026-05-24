@@ -944,6 +944,61 @@ in
         expr = builtins.length configs.web-1.services.cron.systemCronJobs;
         expected = 1;
       };
+
+      # ─── Config-path queries: SELECT WHERE on NixOS config properties ───
+
+      # "Show me all servers where the firewall has port 443 open"
+      test-where-firewall-has-443 = {
+        expr = builtins.attrNames (sql.nixosQueries.serversWhere configs
+          [ "networking" "firewall" "allowedTCPPorts" ]
+          (ports: builtins.elem 443 ports));
+        expected = [ "web-1" ];
+      };
+
+      # "Show me all servers where openssh is enabled"
+      test-where-ssh-enabled = {
+        expr = builtins.sort builtins.lessThan
+          (builtins.attrNames (sql.nixosQueries.serversWhere configs
+            [ "services" "openssh" "enable" ]
+            (v: v == true)));
+        expected = [ "api-1" "db-1" "web-1" "web-2" ];
+      };
+
+      # "Show me servers that have cron jobs configured"
+      test-where-has-cron-jobs = {
+        expr = builtins.sort builtins.lessThan
+          (builtins.attrNames (sql.nixosQueries.serversWhere configs
+            [ "services" "cron" "systemCronJobs" ]
+            (jobs: jobs != [])));
+        expected = [ "db-1" "web-1" ];
+      };
+
+      # "Show me servers where a specific user exists"
+      test-where-user-alice-exists = {
+        expr = builtins.sort builtins.lessThan
+          (builtins.attrNames (sql.nixosQueries.serversWhere configs
+            [ "users" "users" ]
+            (users: users ? alice)));
+        expected = [ "db-1" "web-1" ];
+      };
+
+      # "Extract hostnames of servers that have any open ports"
+      test-select-hostnames-with-open-ports = {
+        expr = sql.nixosQueries.selectFromConfigs configs
+          (cfg: cfg.networking.hostName)
+          (hostname: let
+            cfg = configs.${hostname};
+          in cfg.networking.firewall.allowedTCPPorts != []);
+        expected = { web-1 = "web-1"; api-1 = "api-1"; };
+      };
+
+      # "Which servers have the 'database' tag?"
+      test-where-tagged-database = {
+        expr = builtins.attrNames (sql.nixosQueries.serversWhere configs
+          [ "environment" "etc" "server-tags" "text" ]
+          (tags: lib.hasInfix "database" tags));
+        expected = [ "db-1" ];
+      };
     };
 
   integration = {

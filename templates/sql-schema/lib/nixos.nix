@@ -172,6 +172,27 @@ let
     lib.filterAttrs (_: cfg:
       (cfg.environment.etc.environment.text or "") == env
     ) configs;
+
+  # Generic config path query: select servers where a config path has a specific value
+  # Example: serversWhere configs ["networking" "firewall" "allowedTCPPorts"] (ports: builtins.elem 443 ports)
+  serversWhere = configs: path: pred:
+    lib.filterAttrs (_: cfg:
+      let
+        val = lib.attrByPath path null cfg;
+      in
+      val != null && pred val
+    ) configs;
+
+  # Select servers matching a config predicate, return { serverName = extractedValue; }
+  # Example: selectFromConfigs configs (cfg: cfg.networking.hostName) (v: v != "")
+  selectFromConfigs = configs: extract: pred:
+    let
+      extracted = lib.mapAttrs (_: cfg:
+        let v = extract cfg; in
+        if pred v then v else null
+      ) configs;
+    in
+    lib.filterAttrs (_: v: v != null) extracted;
 in
 {
   inherit
@@ -195,6 +216,8 @@ in
       serversWithUser
       serversWithSudo
       allOpenPorts
+      serversWhere
+      selectFromConfigs
       serversInEnv
       ;
   };
