@@ -30,16 +30,34 @@
         "type": "github"
       }
     },
-    "gen-schema": {
+    "gen-graph": {
       "inputs": {
         "nixpkgs": "nixpkgs"
       },
       "locked": {
-        "lastModified": 1779523485,
-        "narHash": "sha256-yHomjBwDq+wX5zFGNVvhIar+zu80HFeRjeNE7rRbAgQ=",
+        "lastModified": 1779589643,
+        "narHash": "sha256-oVDRbhZZa1k6ZW1aBhQZE1npoW6oSaJJ7GMqlPabvpI=",
+        "owner": "sini",
+        "repo": "gen-graph",
+        "rev": "fc331b8c3f4bce430655c19640d9250876a7aba0",
+        "type": "github"
+      },
+      "original": {
+        "owner": "sini",
+        "repo": "gen-graph",
+        "type": "github"
+      }
+    },
+    "gen-schema": {
+      "inputs": {
+        "nixpkgs": "nixpkgs_2"
+      },
+      "locked": {
+        "lastModified": 1779589474,
+        "narHash": "sha256-D2jNpsOe+Qci83/EOe1wGZGJ801FWy3qQVbREFcMhjw=",
         "owner": "sini",
         "repo": "gen-schema",
-        "rev": "965edd8befe3ec89aff440d15cf446a99611ae08",
+        "rev": "4b13bd675d52f40c7cc8693a70e12bd5b05d1f46",
         "type": "github"
       },
       "original": {
@@ -50,11 +68,11 @@
     },
     "nixpkgs": {
       "locked": {
-        "lastModified": 1778869304,
-        "narHash": "sha256-30sZNZoA1cqF5JNO9fVX+wgiQYjB7HJqqJ4ztCDeBZE=",
+        "lastModified": 1779508470,
+        "narHash": "sha256-Ap9KJX+5xHIn3bPIpfNgT6MEXdAECECwo4/rmlQD74M=",
         "owner": "NixOS",
         "repo": "nixpkgs",
-        "rev": "d233902339c02a9c334e7e593de68855ad26c4cb",
+        "rev": "29916453413845e54a65b8a1cf996842300cd299",
         "type": "github"
       },
       "original": {
@@ -80,23 +98,40 @@
         "type": "github"
       }
     },
+    "nixpkgs_3": {
+      "locked": {
+        "lastModified": 1778869304,
+        "narHash": "sha256-30sZNZoA1cqF5JNO9fVX+wgiQYjB7HJqqJ4ztCDeBZE=",
+        "owner": "NixOS",
+        "repo": "nixpkgs",
+        "rev": "d233902339c02a9c334e7e593de68855ad26c4cb",
+        "type": "github"
+      },
+      "original": {
+        "owner": "NixOS",
+        "ref": "nixos-unstable",
+        "repo": "nixpkgs",
+        "type": "github"
+      }
+    },
     "root": {
       "inputs": {
         "gen": "gen",
         "gen-aspects": "gen-aspects",
+        "gen-graph": "gen-graph",
         "gen-schema": "gen-schema",
-        "nixpkgs": "nixpkgs_2",
+        "nixpkgs": "nixpkgs_3",
         "scope-engine": "scope-engine"
       }
     },
     "scope-engine": {
       "locked": {
-        "lastModified": 1779345426,
-        "narHash": "sha256-/1tG4L/peDcpNwHuOnhNSIvrKo+CwZjGN5Vam2RL6xE=",
-        "owner": "sini",
-        "repo": "scope-engine",
-        "rev": "ccfc650751d5d83cdf5eb822de97e55df988a890",
-        "type": "github"
+        "dirtyRev": "01367f4d4f47a32f0a055a3f5958fb9ad1e59abd-dirty",
+        "dirtyShortRev": "01367f4-dirty",
+        "lastModified": 1779528204,
+        "narHash": "sha256-H5GIEx5KQoq3twm6L59Y0WpeS8frFZA3Y1Z3kcjVVh4=",
+        "type": "git",
+        "url": "file:///home/sini/Documents/repos/scope-engine"
       },
       "original": {
         "owner": "sini",
