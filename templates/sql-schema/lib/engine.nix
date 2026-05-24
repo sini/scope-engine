@@ -71,6 +71,45 @@ let
         lv = resolveValue aliases row expr.left;
         rv = resolveValue aliases row expr.right;
       in lv != rv
+    else if expr.op == ">" then
+      let
+        lv = resolveValue aliases row expr.left;
+        rv = resolveValue aliases row expr.right;
+      in lv > rv
+    else if expr.op == ">=" then
+      let
+        lv = resolveValue aliases row expr.left;
+        rv = resolveValue aliases row expr.right;
+      in lv >= rv
+    else if expr.op == "<" then
+      let
+        lv = resolveValue aliases row expr.left;
+        rv = resolveValue aliases row expr.right;
+      in lv < rv
+    else if expr.op == "<=" then
+      let
+        lv = resolveValue aliases row expr.left;
+        rv = resolveValue aliases row expr.right;
+      in lv <= rv
+    else if expr.op == "LIKE" then
+      let
+        lv = resolveValue aliases row expr.left;
+        pattern = expr.right;
+        # Convert SQL LIKE pattern to Nix regex: % → .*, _ → ., escape rest
+        toRegex = p:
+          let
+            chars = lib.stringToCharacters p;
+            converted = map (c:
+              if c == "%" then ".*"
+              else if c == "_" then "."
+              else if builtins.elem c [ "." "^" "$" "[" "]" "(" ")" "{" "}" "\\" "+" "?" "|" ] then "\\${c}"
+              else c
+            ) chars;
+          in
+          lib.concatStrings converted;
+        regex = toRegex pattern;
+      in
+      builtins.isString lv && builtins.match regex lv != null
     else if expr.op == "IN" then
       let
         lv = resolveValue aliases row expr.left;

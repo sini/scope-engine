@@ -1,7 +1,7 @@
 # SQL string parser — tokenizer + recursive descent parser.
 #
 # Supports: SELECT (columns, *), FROM (kind, alias), JOIN / LEFT JOIN (ON condition),
-# WHERE (=, !=, IN, IS NULL, IS NOT NULL, AND, OR), ORDER BY, LIMIT.
+# WHERE (=, !=, <, >, <=, >=, LIKE, IN, IS NULL, IS NOT NULL, AND, OR), ORDER BY, LIMIT.
 #
 # Produces an AST attrset: { select, from, joins, where, orderBy, limit }.
 { lib }:
@@ -100,12 +100,24 @@ let
             else
               go (pos + 1) acc (currentToken + c) false
           else if c == "<" then
-            if currentToken != "" then
+            # Look ahead for <=
+            if pos + 1 < len && builtins.elemAt chars (pos + 1) == "=" then
+              if currentToken != "" then
+                go (pos + 2) (acc ++ [ currentToken "<=" ]) "" false
+              else
+                go (pos + 2) (acc ++ [ "<=" ]) "" false
+            else if currentToken != "" then
               go (pos + 1) (acc ++ [ currentToken "<" ]) "" false
             else
               go (pos + 1) (acc ++ [ "<" ]) "" false
           else if c == ">" then
-            if currentToken != "" then
+            # Look ahead for >=
+            if pos + 1 < len && builtins.elemAt chars (pos + 1) == "=" then
+              if currentToken != "" then
+                go (pos + 2) (acc ++ [ currentToken ">=" ]) "" false
+              else
+                go (pos + 2) (acc ++ [ ">=" ]) "" false
+            else if currentToken != "" then
               go (pos + 1) (acc ++ [ currentToken ">" ]) "" false
             else
               go (pos + 1) (acc ++ [ ">" ]) "" false
@@ -125,6 +137,8 @@ let
     else if tok == "!=" then { type = "op"; value = "!="; }
     else if tok == "<" then { type = "op"; value = "<"; }
     else if tok == ">" then { type = "op"; value = ">"; }
+    else if tok == "<=" then { type = "op"; value = "<="; }
+    else if tok == ">=" then { type = "op"; value = ">="; }
     else if lib.hasPrefix "'" tok then { type = "string"; value = builtins.substring 1 (builtins.stringLength tok - 2) tok; }
     else if builtins.match "[0-9]+" tok != null then { type = "number"; value = lib.strings.toInt tok; }
     else if isKeyword tok then { type = "keyword"; value = toUpper tok; }
@@ -319,7 +333,18 @@ let
               result = { op = "IN"; left = left.result; right = list.result; };
               rest = list.rest;
             }
-          # = or !=
+          # LIKE 'pattern'
+          else if op.value == "LIKE" then
+            let
+              rest1 = advance left.rest;
+              pattern = peek rest1;
+            in
+            if pattern == null then throw "sql-parser: expected pattern after LIKE"
+            else {
+              result = { op = "LIKE"; left = left.result; right = pattern.value; };
+              rest = advance rest1;
+            }
+          # =, !=, <, >, <=, >=
           else if op.type == "op" then
             let
               rest1 = advance left.rest;

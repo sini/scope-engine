@@ -1067,6 +1067,65 @@ in
       expected = [ "db-1" "web-1" ];
     };
 
+    # ─── Comparison operators (>, >=, <, <=) ───
+
+    # "Servers with more than 4 cores"
+    test-sql-gt-cores = {
+      expr = map (r: r.hostname) (sql.query "SELECT hostname FROM servers WHERE cores > 4");
+      expected = [ "db-1" ];  # db-1 has 8 cores
+    };
+
+    # "Servers with at least 16GB RAM"
+    test-sql-gte-ram = {
+      expr = builtins.sort builtins.lessThan
+        (map (r: r.hostname) (sql.query "SELECT hostname FROM servers WHERE ram_gb >= 16"));
+      expected = [ "api-1" "db-1" ];  # api-1 has 16, db-1 has 32
+    };
+
+    # "Ports below 1024"
+    test-sql-lt-ports = {
+      expr = builtins.sort builtins.lessThan
+        (map (r: r.number) (sql.query "SELECT number FROM ports WHERE number < 1024"));
+      expected = [ 80 443 ];
+    };
+
+    # "Servers with 4 or fewer cores"
+    test-sql-lte-cores = {
+      expr = builtins.sort builtins.lessThan
+        (map (r: r.hostname) (sql.query "SELECT hostname FROM servers WHERE cores <= 4"));
+      expected = [ "api-1" "web-1" "web-2" ];
+    };
+
+    # Combined: "High-spec servers in us-east-1"
+    test-sql-gt-and = {
+      expr = map (r: r.hostname)
+        (sql.query "SELECT hostname FROM servers WHERE cores > 4 AND datacenter = 'us-east-1'");
+      expected = [ "db-1" ];
+    };
+
+    # ─── LIKE operator ───
+
+    # "Servers with hostnames starting with 'web'"
+    test-sql-like-prefix = {
+      expr = builtins.sort builtins.lessThan
+        (map (r: r.hostname) (sql.query "SELECT hostname FROM servers WHERE hostname LIKE 'web%'"));
+      expected = [ "web-1" "web-2" ];
+    };
+
+    # "Servers with hostnames ending with '-1'"
+    test-sql-like-suffix = {
+      expr = builtins.sort builtins.lessThan
+        (map (r: r.hostname) (sql.query "SELECT hostname FROM servers WHERE hostname LIKE '%-1'"));
+      expected = [ "api-1" "db-1" "web-1" ];
+    };
+
+    # "Servers with hostnames containing 'b'"
+    test-sql-like-contains = {
+      expr = builtins.sort builtins.lessThan
+        (map (r: r.hostname) (sql.query "SELECT hostname FROM servers WHERE hostname LIKE '%b%'"));
+      expected = [ "db-1" "web-1" "web-2" ];
+    };
+
     # "Full config summary: hostname, services, users"
     test-sql-config-summary = {
       expr = let
