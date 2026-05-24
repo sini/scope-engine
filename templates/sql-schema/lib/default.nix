@@ -20,6 +20,10 @@ let
   # SQL parser + engine
   sqlParser = import ./sql.nix { inherit lib; };
   sqlEngine = import ./engine.nix { inherit lib; };
+
+  # DDL generator
+  ddlLib = import ./ddl.nix { inherit lib schemaLib; };
+  ddl = ddlLib.generateDDL evaluated.schema;
 in
 {
   inherit (schemaModule) refinements validators;
@@ -46,4 +50,10 @@ in
   inherit (sqlParser) parseSql tokenize;
   query = sqlEngine.query rawFleet;
   queryFleet = sqlEngine.query;
+
+  # DDL
+  inherit ddl;
+  generateDDL = ddlLib.generateDDL;
+  migrationOrder = ddlLib.migrationOrder evaluated.schema;
+  inherit (ddlLib) escapeIdent;
 }

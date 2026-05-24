@@ -668,4 +668,83 @@ in
         expected = true;
       };
     };
+
+  ddl =
+    let
+      inherit (sql) ddl migrationOrder;
+    in
+    {
+      test-table-count = {
+        # At least one CREATE TABLE per schema kind
+        expr = builtins.length ddl.tables >= 21;
+        expected = true;
+      };
+
+      test-migration-order-roots-first = {
+        # datacenter, environment, ldap-group have no deps — should come first
+        expr =
+          let
+            firstFew = lib.take 5 migrationOrder;
+          in
+          builtins.elem "datacenter" firstFew
+          && builtins.elem "environment" firstFew
+          && builtins.elem "ldap-group" firstFew;
+        expected = true;
+      };
+
+      test-migration-order-deps-before-dependents = {
+        # network depends on datacenter: datacenter must come before network
+        expr =
+          let
+            dcIdx = lib.lists.findFirstIndex (x: x == "datacenter") null migrationOrder;
+            netIdx = lib.lists.findFirstIndex (x: x == "network") null migrationOrder;
+          in
+          dcIdx != null && netIdx != null && dcIdx < netIdx;
+        expected = true;
+      };
+
+      test-migration-order-all-kinds = {
+        expr = builtins.length migrationOrder;
+        expected = 21;
+      };
+
+      test-reserved-word-escaping = {
+        expr = sql.escapeIdent "user";
+        expected = "user_";
+      };
+
+      test-hyphen-escaping = {
+        expr = sql.escapeIdent "dns-record";
+        expected = "dns_record";
+      };
+
+      test-junction-table-for-setof = {
+        # user.servers is setOf → produces junction table
+        expr =
+          builtins.any (t: lib.hasInfix "user__servers" t || lib.hasInfix "user_servers" t) ddl.tables;
+        expected = true;
+      };
+
+      test-indexes-generated = {
+        expr = builtins.length ddl.indexes > 0;
+        expected = true;
+      };
+
+      test-views-generated = {
+        expr = builtins.length ddl.views;
+        expected = 2;
+      };
+
+      test-datacenter-table-ddl = {
+        # Datacenter table should have name_ and region columns
+        expr =
+          let
+            dcTables = builtins.filter (t: lib.hasInfix "CREATE TABLE datacenter" t) ddl.tables;
+          in
+          builtins.length dcTables == 1
+          && lib.hasInfix "name_ text PRIMARY KEY" (builtins.head dcTables)
+          && lib.hasInfix "region text" (builtins.head dcTables);
+        expected = true;
+      };
+    };
 }
