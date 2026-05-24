@@ -21,12 +21,11 @@ This is the SQL equivalent of the [nest-traits](../nest-traits/) template's CSS 
 ## Quick Start
 
 ```bash
-# Run all 148 tests
+# Run all 156 tests
 nix eval --override-input scope-engine ../.. .#tests
 
 # Explore interactively
 nix repl --override-input scope-engine ../.. .
-# nix-repl> :l .#sql
 # nix-repl> sql.query "SELECT hostname FROM servers WHERE datacenter = 'us-east-1'"
 ```
 
@@ -36,7 +35,7 @@ Everything below is evaluated from a single Nix expression. 21 schema kinds, 52 
 
 ### Query raw infrastructure with SQL
 
-All examples below use `sql.query` in a `nix repl` session after `:l .#sql`.
+All examples below use `sql.query` in a `nix repl` session.
 
 ```nix
 # What servers are in us-east-1?
