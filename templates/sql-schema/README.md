@@ -16,11 +16,12 @@ This is the SQL equivalent of the [nest-traits](../nest-traits/) template's CSS 
 | **ACL synthesis** | template-local | LDAP identity x infrastructure topology x policy → effective permissions |
 | **Network reachability** | template-local | Firewall rules x network topology → server-to-server connectivity |
 | **NixOS generator** | template-local | Infrastructure queries → NixOS module configs per server |
+| **Rule engine** | template-local | SQL WHERE → NixOS module delivery (parallel to nest-traits CSS rules) |
 
 ## Quick Start
 
 ```bash
-# Run all 123 tests
+# Run all 134 tests
 nix eval --override-input scope-engine ../.. .#tests
 
 # Explore interactively
@@ -421,6 +422,69 @@ nixosQueries.selectFromConfigs configs
 
 `serversWhere` takes a config path (list of attr names) and a predicate. It walks the path with `lib.attrByPath`, then applies the predicate. This lets you query any property in the evaluated NixOS configuration — firewall rules, users, services, environment variables, cron jobs, tags — without writing kind-specific query functions.
 
+### Step 10: Rule-Based Host Configuration
+
+Rules deliver NixOS modules to servers based on SQL WHERE conditions — the direct parallel to nest-traits' CSS selector → config delivery.
+
+**Nest-traits:** `{ is = traits.host; nixos = { boot.loader.grub.enable = true; }; }`
+**SQL demo:** `{ where = "tags IN ('web')"; nixos = { services.nginx.enable = true; }; }`
+
+```nix
+# Define rules
+rules = [
+  # No WHERE = matches all servers
+  { nixos = { services.openssh.enable = true; }; }
+
+  # SQL WHERE → NixOS modules
+  { where = "tags IN ('web')";
+    nixos = { services.nginx.enable = true; }; }
+
+  { where = "tags IN ('database')";
+    nixos = { services.postgresql.enable = true; }; }
+
+  # Complex: multi-join SQL identifies servers with exposed HTTPS
+  { where = "SELECT s.name FROM servers s JOIN services svc ON svc.server = s.name JOIN ports p ON p.service = svc.name WHERE p.expose = true AND p.number = 443";
+    nixos = { security.acme.acceptTerms = true; }; }
+
+  # Dynamic: rule function receives fleet context
+  { where = "tags IN ('web')";
+    nixos = { fleet, server, ... }: {
+      services.nginx.virtualHosts.${server.hostname} = {
+        locations."/".proxyPass = "http://localhost:8080";
+      };
+    }; }
+
+  # Match function: for queries the SQL engine can't express (e.g., setOf traversal)
+  { match = { fleet, serverName, ... }:
+      let
+        adminUsers = lib.filterAttrs (_: u:
+          (u.ldap-role or "") == "admin" && builtins.elem serverName (u.servers or [])
+        ) (fleet.user or {});
+      in adminUsers != {};
+    nixos = { security.sudo.enable = true; }; }
+];
+
+# Build host configs: base (from fleet queries) + matching rules
+hostConfigs = buildAllHostConfigs rawFleet rules buildServerModule;
+
+# Query the results
+hostConfigs.web-1.services.nginx.enable        # → true
+hostConfigs.db-1.services.postgresql.enable     # → true
+hostConfigs.web-1.security.acme.acceptTerms     # → true
+hostConfigs.api-1.security.acme.acceptTerms     # → false (no port 443)
+```
+
+**Rule matching modes:**
+
+| Mode | Field | Description |
+|---|---|---|
+| Match all | (none) | No `where` or `match` → applies to every server |
+| SQL WHERE | `where` | WHERE clause wrapped as `SELECT name FROM servers WHERE ...` |
+| Full SQL | `where` | SELECT query starting with `SELECT` — run as-is, check if server name in results |
+| Nix predicate | `match` | Function `{ fleet, serverName, server } → bool` for queries beyond SQL's reach |
+
+**NixOS delivery:** `nixos` can be a plain attrset (static) or a function `{ fleet, serverName, server } → attrset` (dynamic). The engine deep-merges the base module (from `buildServerModule`) with all matching rule modules in declaration order via `lib.recursiveUpdate`.
+
 ---
 
 ## Data Model
@@ -463,7 +527,7 @@ Plus 2 synthesized outputs: `effective-access`, `network-reachability`.
 | `:has(trait)` child selector | `JOIN ... ON fk = pk` |
 | `:within(trait)` ancestor selector | Multi-hop JOIN chains |
 | `[attr=val]` attribute selector | `WHERE col = 'val'` |
-| Rule delivers `{ nixos = config; }` | Query delivers result set rows |
+| Rule delivers `{ nixos = config; }` | Rule delivers `{ where = "..."; nixos = config; }` |
 | Traits with `needs`/`neededBy` | Kinds with `ref`/`parent` |
 | CSS specificity | Migration ordering (topological sort) |
 
@@ -482,7 +546,8 @@ templates/sql-schema/
     acl.nix           # ACL synthesis
     reachability.nix  # network reachability synthesis
     nixos.nix         # NixOS configuration generator
-  tests.nix           # 123 tests across 12 suites
+    rules.nix         # Rule engine: SQL WHERE → NixOS module delivery
+  tests.nix           # 134 tests across 13 suites
   README.md
 ```
 
@@ -501,6 +566,7 @@ templates/sql-schema/
 | acl | 8 | Direct/transitive scope, effective access, "who has sudo" |
 | reachability | 4 | Firewall intersection, self-subnet, deny rules |
 | nixos | 16 | Config generation, user provisioning, post-eval queries |
+| rules | 11 | Rule matching, SQL WHERE, match functions, base merge |
 | integration | 5 | Full pipeline, cross-model queries |
 
 ## Running Tests

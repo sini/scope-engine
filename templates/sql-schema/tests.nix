@@ -1001,6 +1001,80 @@ in
       };
     };
 
+  rules = let
+    configs = sql.hostConfigs;
+  in {
+    # All servers get SSH (no WHERE = matches all)
+    test-all-servers-have-ssh = {
+      expr = builtins.all (name:
+        configs.${name}.services.openssh.enable or false
+      ) (builtins.attrNames configs);
+      expected = true;
+    };
+
+    # web-1 gets nginx (tagged "web")
+    test-web1-has-nginx = {
+      expr = configs.web-1.services.nginx.enable or false;
+      expected = true;
+    };
+
+    # db-1 gets postgresql (tagged "database")
+    test-db1-has-postgresql = {
+      expr = configs.db-1.services.postgresql.enable or false;
+      expected = true;
+    };
+
+    # db-1 does NOT get nginx (not tagged "web")
+    test-db1-no-nginx = {
+      expr = configs.db-1.services.nginx.enable or false;
+      expected = false;
+    };
+
+    # web-1 gets ACME (has exposed port 443 via nginx)
+    test-web1-has-acme = {
+      expr = configs.web-1.security.acme.acceptTerms or false;
+      expected = true;
+    };
+
+    # api-1 does NOT get ACME (port 50051 is not 443)
+    test-api1-no-acme = {
+      expr = configs.api-1.security.acme.acceptTerms or false;
+      expected = false;
+    };
+
+    # web-1 gets sudo (alice has admin role, assigned to web-1)
+    test-web1-has-sudo = {
+      expr = configs.web-1.security.sudo.enable or false;
+      expected = true;
+    };
+
+    # api-1 does NOT get sudo (bob is developer, no sudo)
+    test-api1-no-sudo = {
+      expr = configs.api-1.security.sudo.enable or false;
+      expected = false;
+    };
+
+    # All prod servers get monitoring
+    test-prod-servers-have-monitoring = {
+      expr = builtins.all (name:
+        configs.${name}.services.prometheus.exporters.node.enable or false
+      ) (builtins.attrNames configs);
+      expected = true;
+    };
+
+    # Base module still present (hostname from nixos.nix)
+    test-base-module-preserved = {
+      expr = configs.web-1.networking.hostName;
+      expected = "web-1";
+    };
+
+    # Base firewall ports still present after rule merge
+    test-base-firewall-preserved = {
+      expr = builtins.sort builtins.lessThan (configs.web-1.networking.firewall.allowedTCPPorts);
+      expected = [ 80 443 ];
+    };
+  };
+
   integration = {
     test-full-pipeline = {
       # Schema → Fleet → Graph → DDL → ACL → Reachability all evaluate
