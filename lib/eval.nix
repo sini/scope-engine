@@ -35,7 +35,7 @@ let
                   attributes.${attrName} self id
                 )
               else
-                throw "scope-engine: unknown attribute '${attrName}' on node '${id}'";
+                throw "gen-scope: unknown attribute '${attrName}' on node '${id}'";
           }
         ) self.nodes;
       }
@@ -44,7 +44,7 @@ let
   # Diagnostic variant with shadow-stack cycle tracing (spec Open Question #2/#5).
   #
   # Threads a _visited list through self so that cycles produce structured
-  # traces like "scope-engine: cycle: a.x -> b.x -> a.x" instead of Nix's
+  # traces like "gen-scope: cycle: a.x -> b.x -> a.x" instead of Nix's
   # opaque "infinite recursion encountered."
   #
   # Attribute functions keep the same signature (self: id:). The visited
@@ -78,9 +78,9 @@ let
                 traceEntry = "${id}.${attrName}";
               in
               if !(attributes ? ${attrName}) then
-                throw "scope-engine: unknown attribute '${attrName}' on node '${id}'"
+                throw "gen-scope: unknown attribute '${attrName}' on node '${id}'"
               else if builtins.elem traceEntry visited then
-                throw "scope-engine: cycle detected: ${builtins.concatStringsSep " -> " (visited ++ [ traceEntry ])}"
+                throw "gen-scope: cycle detected: ${builtins.concatStringsSep " -> " (visited ++ [ traceEntry ])}"
               else
                 let
                   # Create a new self with the updated visited stack.

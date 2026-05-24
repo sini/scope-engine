@@ -74,7 +74,7 @@ let
             targets = edgeTargets "P" id;
           in
           if builtins.length targets > 1 then
-            throw "scope-engine: node '${id}' has ${toString (builtins.length targets)} parent edges (P must be a partial function, Neron §2.2)"
+            throw "gen-scope: node '${id}' has ${toString (builtins.length targets)} parent edges (P must be a partial function, Neron §2.2)"
           else if targets != [ ] then builtins.head targets
           else null;
         # Backwards-compatible: imports from I edges.

@@ -113,7 +113,7 @@ let
       result = resolve node;
     in
     if builtins.elem id _visited then
-      throw "scope-engine: parent cycle detected at '${id}' (parent relation must be well-founded, Neron §2.2)"
+      throw "gen-scope: parent cycle detected at '${id}' (parent relation must be well-founded, Neron §2.2)"
     else if result != null then
       result
     else if !allowParent then
@@ -141,7 +141,7 @@ let
           next = f self id prev;
         in
         if n >= maxIter then
-          throw "scope-engine: circular attribute on '${id}' did not converge after ${toString maxIter} iterations"
+          throw "gen-scope: circular attribute on '${id}' did not converge after ${toString maxIter} iterations"
         else if eq prev next then
           next
         else
