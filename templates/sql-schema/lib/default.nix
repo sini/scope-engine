@@ -6,10 +6,13 @@
   genLib,
 }:
 let
-  fleet = import ./fleet.nix;
+  rawFleet = import ./fleet.nix;
+  schema = import ./schema.nix { inherit lib schemaLib; };
+  evaluated = schema.evalSchema rawFleet;
 in
 {
-  inherit fleet;
-  # Placeholder — wired in milestone 2
-  evalSchema = null;
+  inherit (schema) refinements validators;
+  inherit (evaluated) schema fleet;
+  evalSchema = schema.evalSchema;
+  rawFleet = rawFleet;
 }
