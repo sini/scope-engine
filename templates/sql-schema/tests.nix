@@ -1001,6 +1001,89 @@ in
       };
     };
 
+  # ─── SQL queries against rendered NixOS configs ─────────────────
+  # queryHostConfigs flattens host configs into a "hosts" table and
+  # evaluates SQL strings against it — querying the BUILT config,
+  # not the input fleet data.
+
+  config-queries = let
+    qhc = sql.queryHostConfigs;
+  in {
+    # "Which hosts have nginx enabled?"
+    test-sql-nginx-hosts = {
+      expr = builtins.sort builtins.lessThan
+        (map (r: r.name) (qhc "SELECT name FROM hosts WHERE nginx_enabled = true"));
+      expected = [ "web-1" "web-2" ];  # both tagged "web"
+    };
+
+    # "Which hosts have postgresql enabled?"
+    test-sql-postgresql-hosts = {
+      expr = map (r: r.name) (qhc "SELECT name FROM hosts WHERE postgresql_enabled = true");
+      expected = [ "db-1" ];
+    };
+
+    # "Which hosts have sudo enabled?"
+    test-sql-sudo-hosts = {
+      expr = builtins.sort builtins.lessThan
+        (map (r: r.name) (qhc "SELECT name FROM hosts WHERE sudo_enabled = true"));
+      expected = [ "db-1" "web-1" ];
+    };
+
+    # "Which hosts have ACME certs?"
+    test-sql-acme-hosts = {
+      expr = map (r: r.name) (qhc "SELECT name FROM hosts WHERE acme_enabled = true");
+      expected = [ "web-1" ];
+    };
+
+    # "Show me hostnames and their open TCP ports for hosts with ports open"
+    # Use a Nix filter on the SQL result since list-emptiness isn't expressible in our SQL subset
+    test-sql-hostname-ports = {
+      expr = builtins.sort (a: b: a.hostname < b.hostname)
+        (builtins.filter (r: r.open_tcp_ports != [])
+          (qhc "SELECT hostname, open_tcp_ports FROM hosts"));
+      expected = [
+        { hostname = "api-1"; open_tcp_ports = [ 50051 ]; }
+        { hostname = "web-1"; open_tcp_ports = [ 80 443 ]; }
+      ];
+    };
+
+    # "Which hosts have users but no sudo?"
+    test-sql-users-no-sudo = {
+      expr = map (r: r.name)
+        (qhc "SELECT name FROM hosts WHERE user_count != 0 AND sudo_enabled = false");
+      expected = [ "api-1" ];  # bob is developer on api-1, no sudo
+    };
+
+    # "Hosts with monitoring enabled"
+    test-sql-monitoring = {
+      expr = builtins.length (qhc "SELECT name FROM hosts WHERE monitoring_enabled = true");
+      expected = 4;  # all servers are prod
+    };
+
+    # "Hosts with cron jobs"
+    test-sql-cron-hosts = {
+      expr = builtins.sort builtins.lessThan
+        (map (r: r.name) (qhc "SELECT name FROM hosts WHERE cron_job_count != 0"));
+      expected = [ "db-1" "web-1" ];
+    };
+
+    # "Full config summary: hostname, services, users"
+    test-sql-config-summary = {
+      expr = let
+        r = builtins.head (qhc "SELECT hostname, nginx_enabled, postgresql_enabled, sudo_enabled, user_count FROM hosts WHERE name = 'web-1'");
+      in {
+        inherit (r) hostname nginx_enabled postgresql_enabled sudo_enabled user_count;
+      };
+      expected = {
+        hostname = "web-1";
+        nginx_enabled = true;
+        postgresql_enabled = false;
+        sudo_enabled = true;
+        user_count = 1;
+      };
+    };
+  };
+
   rules = let
     configs = sql.hostConfigs;
   in {

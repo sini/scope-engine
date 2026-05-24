@@ -193,6 +193,38 @@ let
       ) configs;
     in
     lib.filterAttrs (_: v: v != null) extracted;
+
+  # Flatten host configs into a queryable table for the SQL engine.
+  # Each server becomes a row with columns extracted from the NixOS config.
+  # Returns an attrset suitable as a fleet kind: { serverName = { col = val; ... }; }
+  configsAsTable = configs:
+    lib.mapAttrs (name: cfg: {
+      inherit name;
+      hostname = cfg.networking.hostName or name;
+      open_tcp_ports = cfg.networking.firewall.allowedTCPPorts or [];
+      open_udp_ports = cfg.networking.firewall.allowedUDPPorts or [];
+      ssh_enabled = cfg.services.openssh.enable or false;
+      nginx_enabled = cfg.services.nginx.enable or false;
+      postgresql_enabled = cfg.services.postgresql.enable or false;
+      sudo_enabled = cfg.security.sudo.enable or false;
+      acme_enabled = cfg.security.acme.acceptTerms or false;
+      monitoring_enabled = cfg.services.prometheus.exporters.node.enable or false;
+      user_count = builtins.length (builtins.attrNames (cfg.users.users or {}));
+      users = builtins.attrNames (cfg.users.users or {});
+      cron_job_count = builtins.length (cfg.services.cron.systemCronJobs or []);
+      environment = cfg.environment.etc.environment.text or "";
+      tags = cfg.environment.etc."server-tags".text or "";
+    }) configs;
+
+  # Query rendered NixOS configs with SQL strings.
+  # Registers the flattened config table as "hosts" in the fleet, then runs the query.
+  queryConfigs = queryFn: configs: sqlStr:
+    let
+      table = configsAsTable configs;
+      # Create a synthetic fleet with just the hosts table
+      syntheticFleet = { hosts = table; };
+    in
+    queryFn syntheticFleet sqlStr;
 in
 {
   inherit
@@ -218,6 +250,8 @@ in
       allOpenPorts
       serversWhere
       selectFromConfigs
+      configsAsTable
+      queryConfigs
       serversInEnv
       ;
   };

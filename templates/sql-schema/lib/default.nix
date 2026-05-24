@@ -37,6 +37,12 @@ let
   # Rule-based host configuration
   rulesLib = import ./rules.nix { inherit lib; queryFn = sqlEngine.query; };
 
+  # Host configs: base modules + rule-matched modules
+  hostConfigs = rulesLib.buildAllHostConfigs rawFleet demoRules nixosLib.buildServerModule;
+
+  # SQL queries against the rendered NixOS configs
+  queryHostConfigs = nixosLib.queries.queryConfigs sqlEngine.query hostConfigs;
+
   # Default demo rules — SQL WHERE → NixOS modules
   demoRules = [
     # All servers get SSH (no WHERE = matches all)
@@ -116,5 +122,5 @@ in
   # Rule-based host configuration
   inherit (rulesLib) ruleMatchesServer matchingModules buildHostConfig buildAllHostConfigs;
   inherit demoRules;
-  hostConfigs = rulesLib.buildAllHostConfigs rawFleet demoRules nixosLib.buildServerModule;
+  inherit hostConfigs queryHostConfigs;
 }
