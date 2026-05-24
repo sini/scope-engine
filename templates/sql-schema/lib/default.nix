@@ -24,6 +24,12 @@ let
   # DDL generator
   ddlLib = import ./ddl.nix { inherit lib schemaLib; };
   ddl = ddlLib.generateDDL evaluated.schema;
+
+  # Synthesis
+  aclLib = import ./acl.nix { inherit lib; };
+  reachLib = import ./reachability.nix { inherit lib; };
+  effectiveAccess = aclLib.synthesizeAccess rawFleet;
+  networkReachability = reachLib.synthesizeReachability rawFleet;
 in
 {
   inherit (schemaModule) refinements validators;
@@ -56,4 +62,9 @@ in
   generateDDL = ddlLib.generateDDL;
   migrationOrder = ddlLib.migrationOrder evaluated.schema;
   inherit (ddlLib) escapeIdent;
+
+  # Synthesis
+  inherit effectiveAccess networkReachability;
+  synthesizeAccess = aclLib.synthesizeAccess;
+  synthesizeReachability = reachLib.synthesizeReachability;
 }

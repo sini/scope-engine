@@ -747,4 +747,154 @@ in
         expected = true;
       };
     };
+
+  acl =
+    let
+      inherit (sql) effectiveAccess;
+    in
+    {
+      test-alice-has-server-access = {
+        # alice has admin role → ops-server-sudo policy → sudo on assigned servers
+        expr = effectiveAccess ? "alice:server:web-1";
+        expected = true;
+      };
+
+      test-alice-server-actions = {
+        expr = effectiveAccess."alice:server:web-1".actions;
+        expected = [ "sudo" "restart" "ssh" ];
+      };
+
+      test-alice-has-db-access = {
+        # alice is assigned to db-1
+        expr = effectiveAccess ? "alice:server:db-1";
+        expected = true;
+      };
+
+      test-bob-has-server-access = {
+        # bob has developer role → eng-server-logs policy → logs on assigned servers
+        expr = effectiveAccess ? "bob:server:api-1";
+        expected = true;
+      };
+
+      test-bob-server-actions = {
+        expr = effectiveAccess."bob:server:api-1".actions;
+        expected = [ "logs" "ssh" ];
+      };
+
+      test-alice-service-transitive = {
+        # alice has admin role → ops-lb-manage (transitive, loadbalancer)
+        # alice is on web-1, nginx runs on web-1, lb-prod-east backends include nginx
+        expr = effectiveAccess ? "alice:loadbalancer:lb-prod-east";
+        expected = true;
+      };
+
+      test-bob-service-transitive = {
+        # bob has developer role → eng-service-deploy (transitive, service)
+        # bob is on api-1, api service runs on api-1
+        expr = effectiveAccess ? "bob:service:api";
+        expected = true;
+      };
+
+      test-who-has-sudo = {
+        # Filter effective access for sudo actions
+        expr =
+          let
+            sudoEntries = lib.filterAttrs (_: ea:
+              builtins.elem "sudo" ea.actions
+            ) effectiveAccess;
+          in
+          builtins.sort builtins.lessThan (lib.unique (lib.mapAttrsToList (_: ea: ea.user) sudoEntries));
+        expected = [ "alice" ];
+      };
+    };
+
+  reachability =
+    let
+      inherit (sql) networkReachability;
+    in
+    {
+      test-web-to-db-allowed = {
+        # web-to-db firewall rule allows port 5432 from web subnet to db subnet
+        expr =
+          let
+            key = "web-1:db-1";
+          in
+          networkReachability ? ${key} && builtins.elem 5432 networkReachability.${key}.allowedPorts;
+        expected = true;
+      };
+
+      test-web-to-web-self-subnet = {
+        # web-to-web-health allows port 8080 within web subnet
+        expr =
+          let
+            key = "web-1:web-2";
+          in
+          networkReachability ? ${key} && builtins.elem 8080 networkReachability.${key}.allowedPorts;
+        expected = true;
+      };
+
+      test-db-to-api-denied = {
+        # deny-db-outbound blocks db→api, but deny rules don't create reachability
+        # There's no allow rule from db subnet to app subnet
+        expr = !(networkReachability ? "db-1:api-1");
+        expected = true;
+      };
+
+      test-reachability-has-path = {
+        expr =
+          let
+            key = "web-1:db-1";
+          in
+          networkReachability.${key}.path;
+        expected = [ "web-1" "db-1" ];
+      };
+    };
+
+  integration = {
+    test-full-pipeline = {
+      # Schema → Fleet → Graph → DDL → ACL → Reachability all evaluate
+      expr =
+        sql.schema != null
+        && sql.fleet != null
+        && sql.kindNodes != null
+        && sql.ddl != null
+        && sql.effectiveAccess != null
+        && sql.networkReachability != null;
+      expected = true;
+    };
+
+    test-sql-query-against-fleet = {
+      expr =
+        let
+          rows = sql.query "SELECT hostname FROM servers WHERE datacenter = 'us-east-1' ORDER BY hostname";
+        in
+        map (r: r.hostname) rows;
+      expected = [ "db-1" "web-1" "web-2" ];
+    };
+
+    test-ddl-count-matches-kinds = {
+      # At least one table per kind, plus junction tables
+      expr = builtins.length sql.ddl.tables >= 21;
+      expected = true;
+    };
+
+    test-migration-order-valid = {
+      # Migration order includes all 21 kinds
+      expr = builtins.length sql.migrationOrder == 21;
+      expected = true;
+    };
+
+    test-cross-model-acl-query = {
+      # Combine SQL query with ACL synthesis: servers alice has sudo on
+      expr =
+        let
+          sudoEntries = lib.filterAttrs (_: ea:
+            builtins.elem "sudo" ea.actions && lib.hasPrefix "server:" ea.resource
+          ) sql.effectiveAccess;
+          serverNames = map (ea: lib.removePrefix "server:" ea.resource) (builtins.attrValues sudoEntries);
+        in
+        builtins.sort builtins.lessThan serverNames;
+      expected = [ "db-1" "web-1" ];
+    };
+  };
 }
