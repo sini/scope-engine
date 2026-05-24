@@ -21,13 +21,164 @@ This is the SQL equivalent of the [nest-traits](../nest-traits/) template's CSS 
 ## Quick Start
 
 ```bash
-# Run all 134 tests
+# Run all 148 tests
 nix eval --override-input scope-engine ../.. .#tests
 
 # Explore interactively
 nix repl --override-input scope-engine ../.. .
 # nix-repl> :l .#sql
 # nix-repl> sql.query sql.rawFleet "SELECT hostname FROM servers WHERE datacenter = 'us-east-1'"
+```
+
+## Showcase
+
+Everything below is evaluated from a single Nix expression. 21 schema kinds, 52 fleet instances, validated, graphed, queried, compiled to NixOS configs, and queryable end-to-end.
+
+### Query raw infrastructure with SQL
+
+```nix
+# What servers are in us-east-1?
+query fleet "SELECT hostname, cores, ram_gb FROM servers WHERE datacenter = 'us-east-1'"
+# → [ { hostname = "web-1"; cores = 4; ram_gb = 8; }
+#     { hostname = "web-2"; cores = 4; ram_gb = 8; }
+#     { hostname = "db-1";  cores = 8; ram_gb = 32; } ]
+
+# Multi-hop JOIN: what ports are exposed on which servers?
+query fleet ''
+  SELECT s.hostname, svc.name, p.number
+  FROM servers s
+  JOIN services svc ON svc.server = s.name
+  JOIN ports p ON p.service = svc.name
+  WHERE p.expose = true
+''
+# → [ { hostname = "web-1"; name = "nginx"; number = 80; }
+#     { hostname = "web-1"; name = "nginx"; number = 443; }
+#     { hostname = "api-1"; name = "api";   number = 50051; } ]
+
+# Cross-domain: who has sudo access?
+query fleet ''
+  SELECT u.name, u.shell, r.permissions
+  FROM users u
+  JOIN ldap_roles r ON u.ldap_role = r.name
+  WHERE 'sudo' IN r.permissions
+''
+# → [ { name = "alice"; shell = "/bin/zsh"; permissions = ["sudo" "deploy" "restart"]; } ]
+```
+
+### Validate with refinement contracts
+
+```nix
+# CIDR format, VLAN IDs (1-4094), MAC addresses, TCP ports (1-65535),
+# environment tiers (dev/staging/prod), service protocols (tcp/udp/http/grpc),
+# DNS record types (A/AAAA/CNAME/MX/TXT), LB algorithms, firewall actions.
+# Invalid values throw at evaluation time with field path and message.
+
+# Row-polymorphic validators cross-check fields:
+#   server RAM must be >= 2x cores
+#   DNS records must reference a server OR loadbalancer
+#   certificates must be bound to a server OR loadbalancer
+#   service-dependencies cannot be self-referential
+```
+
+### Analyze the dependency graph
+
+```nix
+# What are the root kinds? (create these first in migrations)
+kindRoots
+# → [ "datacenter" "environment" "ldap-group" ]
+
+# What depends on the database server?
+dependents "server:db-1"
+# → [ "interface:db-1.eth0" "service:postgres" "schedule:db-backup" ... ]
+
+# Any circular foreign key dependencies?
+kindCycles
+# → [ "loadbalancer" "server" "user" ]  (self-referential FKs)
+```
+
+### Generate migration-ordered DDL
+
+```nix
+ddl.order
+# → [ "datacenter" "environment" "ldap_group" "network" "ldap_role" "subnet"
+#     "vlan" "server" "domain" "loadbalancer" "interface" "service" ... ]
+
+ddl.tables  # 21 CREATE TABLE statements with FKs, CHECKs, array columns
+ddl.indexes # FK indexes: idx_server_datacenter, idx_service_server, ...
+ddl.views   # CREATE VIEW user_permissions, server_network_map, ...
+```
+
+### Synthesize cross-model relationships
+
+```nix
+# ACL: LDAP identity × infrastructure × policy → effective permissions
+effectiveAccess
+# → { "alice:server:web-1" = { actions = ["sudo" "restart" "ssh"]; via = "ops-server-sudo"; };
+#     "bob:service:api"    = { actions = ["deploy" "logs" "rollback"]; via = "eng-service-deploy"; }; }
+
+# Network reachability: firewall rules × topology → server connectivity
+networkReachability
+# → { "web-1:db-1" = { allowedPorts = [5432]; }; }
+```
+
+### Build NixOS configurations from rules
+
+```nix
+# Rules: SQL WHERE clauses → NixOS modules (parallels nest-traits' CSS → config)
+#   "all servers"          → openssh
+#   "tags IN ('web')"      → nginx
+#   "tags IN ('database')" → postgresql
+#   "exposed port 443"     → ACME certs
+#   "admin-role users"     → sudo
+#   "environment = prod"   → prometheus monitoring
+
+hostConfigs.web-1.services.nginx.enable       # → true
+hostConfigs.web-1.security.acme.acceptTerms   # → true
+hostConfigs.db-1.services.postgresql.enable    # → true
+hostConfigs.db-1.services.nginx.enable         # → false
+hostConfigs.api-1.security.sudo.enable         # → false  (bob is developer)
+hostConfigs.web-1.security.sudo.enable         # → true   (alice is admin)
+```
+
+### Query the built NixOS configs with SQL
+
+```nix
+# The rendered configs are queryable too — SQL against the BUILT system, not just input data
+
+queryHostConfigs "SELECT name FROM hosts WHERE nginx_enabled = true"
+# → [ { name = "web-1"; } { name = "web-2"; } ]
+
+queryHostConfigs "SELECT name FROM hosts WHERE sudo_enabled = true AND postgresql_enabled = false"
+# → [ { name = "web-1"; } ]
+
+queryHostConfigs "SELECT hostname, nginx_enabled, sudo_enabled, user_count FROM hosts WHERE name = 'web-1'"
+# → [ { hostname = "web-1"; nginx_enabled = true; sudo_enabled = true; user_count = 1; } ]
+
+# Config-path queries: walk any NixOS option path with a predicate
+nixosQueries.serversWhere hostConfigs
+  [ "networking" "firewall" "allowedTCPPorts" ]
+  (ports: builtins.elem 443 ports)
+# → { web-1 = { ... }; }
+
+nixosQueries.serversWhere hostConfigs
+  [ "users" "users" ]
+  (users: users ? alice)
+# → { db-1 = { ... }; web-1 = { ... }; }
+```
+
+### The full pipeline
+
+```
+Fleet data (52 instances across 21 kinds)
+  → gen-schema validates (refinements, validators)
+  → scope-engine builds dependency graph
+  → gen-graph detects cycles, computes migration order
+  → SQL engine queries raw infrastructure
+  → ACL synthesis bridges LDAP → infrastructure
+  → Network reachability bridges firewall rules → server connectivity
+  → Rules match servers via SQL WHERE → deliver NixOS modules
+  → NixOS configs built per-server (users, firewall, services, cron)
+  → SQL queries run against the built configs
 ```
 
 ---
