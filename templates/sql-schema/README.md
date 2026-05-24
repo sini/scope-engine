@@ -55,6 +55,19 @@ query fleet ''
 #     { hostname = "web-1"; name = "nginx"; number = 443; }
 #     { hostname = "api-1"; name = "api";   number = 50051; } ]
 
+# Comparison operators: high-spec servers
+query fleet "SELECT hostname, cores, ram_gb FROM servers WHERE cores > 4 AND ram_gb >= 16"
+# → [ { hostname = "db-1"; cores = 8; ram_gb = 32; }
+#     { hostname = "api-1"; cores = 4; ram_gb = 16; } ]
+
+# LIKE with wildcards: servers matching a name pattern
+query fleet "SELECT hostname FROM servers WHERE hostname LIKE 'web%'"
+# → [ { hostname = "web-1"; } { hostname = "web-2"; } ]
+
+# Privileged ports
+query fleet "SELECT number, protocol FROM ports WHERE number < 1024"
+# → [ { number = 80; protocol = "tcp"; } { number = 443; protocol = "tcp"; } ]
+
 # Cross-domain: who has sudo access?
 query fleet ''
   SELECT u.name, u.shell, r.permissions
@@ -63,6 +76,10 @@ query fleet ''
   WHERE 'sudo' IN r.permissions
 ''
 # → [ { name = "alice"; shell = "/bin/zsh"; permissions = ["sudo" "deploy" "restart"]; } ]
+
+# NULL checks: servers that are replacements
+query fleet "SELECT hostname FROM servers WHERE replaces IS NOT NULL"
+# → [ { hostname = "web-2"; } ]
 ```
 
 ### Validate with refinement contracts
