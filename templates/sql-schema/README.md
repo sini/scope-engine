@@ -15,11 +15,12 @@ This is the SQL equivalent of the [nest-traits](../nest-traits/) template's CSS 
 | **DDL generator** | template-local | Migration-ordered CREATE TABLE with FKs, CHECKs, indexes, views |
 | **ACL synthesis** | template-local | LDAP identity x infrastructure topology x policy → effective permissions |
 | **Network reachability** | template-local | Firewall rules x network topology → server-to-server connectivity |
+| **NixOS generator** | template-local | Infrastructure queries → NixOS module configs per server |
 
 ## Quick Start
 
 ```bash
-# Run all 107 tests
+# Run all 123 tests
 nix eval --override-input scope-engine ../.. .#tests
 
 # Explore interactively
@@ -337,6 +338,53 @@ reachability = synthesizeReachability fleet;
 reachability."web-1:db-1".allowedPorts  # → [5432]
 ```
 
+### Step 9: Generate NixOS Configurations
+
+The NixOS configuration generator queries the fleet for each server's related infrastructure (services, ports, users, firewall rules, schedules) and produces a NixOS module attrset per server. This is the SQL equivalent of nest-traits' `class.nixos` builder: nest uses CSS selectors to pick config into hosts, this uses infrastructure queries.
+
+```nix
+# Build a module for a single server
+mod = buildServerModule rawFleet "web-1";
+# → { networking.hostName = "web-1"; networking.firewall.allowedTCPPorts = [80 443]; ... }
+
+# Evaluate all servers at once
+configs = nixosConfigs;
+configs.web-1.networking.hostName          # → "web-1"
+configs.web-1.networking.firewall.allowedTCPPorts  # → [80 443]
+configs.api-1.users.users.bob.uid          # → 1001
+```
+
+**What it queries per server:**
+
+| Relationship | How it's found | What it produces |
+|---|---|---|
+| Services | `service.server == serverName` | Service enablement |
+| Ports | Exposed ports on the server's services | `networking.firewall.allowedTCPPorts` |
+| Interfaces | `interface.server == serverName` | `networking.interfaces` with IP config |
+| Users | `serverName` in `user.servers` | `users.users` with UID, shell, SSH keys |
+| LDAP roles | `user.ldap-role` → `ldap-role.permissions` | `extraGroups = ["wheel"]` for sudo users |
+| Schedules | `schedule.server == serverName` | `services.cron.systemCronJobs` |
+
+**Post-eval query helpers** inspect the built configurations:
+
+```nix
+# Which servers have port 443 open?
+nixosQueries.serversWithPort configs 443
+# → { web-1 = { ... }; }
+
+# Which servers have sudo users?
+nixosQueries.serversWithSudo configs
+# → { web-1 = { ... }; db-1 = { ... }; }
+
+# All open ports across the fleet
+nixosQueries.allOpenPorts configs
+# → { web-1 = [80 443]; web-2 = []; db-1 = []; api-1 = [50051]; }
+
+# Servers in a specific environment
+nixosQueries.serversInEnv configs "prod"
+# → { web-1 = ...; web-2 = ...; db-1 = ...; api-1 = ...; }
+```
+
 ---
 
 ## Data Model
@@ -397,7 +445,8 @@ templates/sql-schema/
     ddl.nix           # DDL generation (tables, indexes, views)
     acl.nix           # ACL synthesis
     reachability.nix  # network reachability synthesis
-  tests.nix           # 107 tests across 11 suites
+    nixos.nix         # NixOS configuration generator
+  tests.nix           # 123 tests across 12 suites
   README.md
 ```
 
@@ -415,6 +464,7 @@ templates/sql-schema/
 | ddl | 10 | Tables, migration order, junction tables, indexes, views |
 | acl | 8 | Direct/transitive scope, effective access, "who has sudo" |
 | reachability | 4 | Firewall intersection, self-subnet, deny rules |
+| nixos | 16 | Config generation, user provisioning, post-eval queries |
 | integration | 5 | Full pipeline, cross-model queries |
 
 ## Running Tests

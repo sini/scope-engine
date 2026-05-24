@@ -30,6 +30,9 @@ let
   reachLib = import ./reachability.nix { inherit lib; };
   effectiveAccess = aclLib.synthesizeAccess rawFleet;
   networkReachability = reachLib.synthesizeReachability rawFleet;
+
+  # NixOS configuration generation
+  nixosLib = import ./nixos.nix { inherit lib; queryFn = sqlEngine.query; };
 in
 {
   inherit (schemaModule) refinements validators;
@@ -67,4 +70,10 @@ in
   inherit effectiveAccess networkReachability;
   synthesizeAccess = aclLib.synthesizeAccess;
   synthesizeReachability = reachLib.synthesizeReachability;
+
+  # NixOS configuration generation
+  inherit (nixosLib) buildServerModule buildAllModules evalServerConfig evalAllConfigs;
+  nixosModules = nixosLib.buildAllModules rawFleet;
+  nixosConfigs = nixosLib.evalAllConfigs rawFleet;
+  nixosQueries = nixosLib.queries;
 }

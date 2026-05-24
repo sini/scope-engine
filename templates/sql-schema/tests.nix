@@ -850,6 +850,102 @@ in
       };
     };
 
+  nixos =
+    let
+      configs = sql.nixosConfigs;
+    in
+    {
+      # Basic config generation
+      test-web1-hostname = {
+        expr = configs.web-1.networking.hostName;
+        expected = "web-1";
+      };
+
+      test-web1-open-ports = {
+        expr = builtins.sort builtins.lessThan configs.web-1.networking.firewall.allowedTCPPorts;
+        expected = [ 80 443 ];
+      };
+
+      test-db1-no-exposed-ports = {
+        # postgres port has expose = false
+        expr = configs.db-1.networking.firewall.allowedTCPPorts;
+        expected = [];
+      };
+
+      test-web2-no-services = {
+        # web-2 has no services assigned
+        expr = configs.web-2.networking.firewall.allowedTCPPorts;
+        expected = [];
+      };
+
+      test-api1-grpc-port = {
+        expr = configs.api-1.networking.firewall.allowedTCPPorts;
+        expected = [ 50051 ];
+      };
+
+      # User provisioning from LDAP
+      test-web1-has-alice = {
+        expr = configs.web-1.users.users ? alice;
+        expected = true;
+      };
+
+      test-web1-alice-has-wheel = {
+        # alice has admin role with sudo permission
+        expr = builtins.elem "wheel" configs.web-1.users.users.alice.extraGroups;
+        expected = true;
+      };
+
+      test-api1-has-bob = {
+        expr = configs.api-1.users.users ? bob;
+        expected = true;
+      };
+
+      test-api1-bob-no-wheel = {
+        # bob is developer, no sudo
+        expr = builtins.elem "wheel" (configs.api-1.users.users.bob.extraGroups or []);
+        expected = false;
+      };
+
+      # Post-eval queries
+      test-servers-with-port-443 = {
+        # only web-1 has nginx with exposed 443
+        expr = builtins.attrNames (sql.nixosQueries.serversWithPort configs 443);
+        expected = [ "web-1" ];
+      };
+
+      test-servers-with-sudo = {
+        # alice is on web-1 and db-1 with sudo
+        expr = builtins.sort builtins.lessThan (builtins.attrNames (sql.nixosQueries.serversWithSudo configs));
+        expected = [ "db-1" "web-1" ];
+      };
+
+      test-all-open-ports = {
+        expr = sql.nixosQueries.allOpenPorts configs;
+        expected = {
+          web-1 = [ 80 443 ];
+          web-2 = [];
+          db-1 = [];
+          api-1 = [ 50051 ];
+        };
+      };
+
+      test-servers-in-prod = {
+        expr = builtins.sort builtins.lessThan (builtins.attrNames (sql.nixosQueries.serversInEnv configs "prod"));
+        expected = [ "api-1" "db-1" "web-1" "web-2" ];
+      };
+
+      # Cron jobs from schedules
+      test-db1-has-backup-cron = {
+        expr = builtins.length configs.db-1.services.cron.systemCronJobs;
+        expected = 1;
+      };
+
+      test-web1-has-logrotate-cron = {
+        expr = builtins.length configs.web-1.services.cron.systemCronJobs;
+        expected = 1;
+      };
+    };
+
   integration = {
     test-full-pipeline = {
       # Schema → Fleet → Graph → DDL → ACL → Reachability all evaluate
