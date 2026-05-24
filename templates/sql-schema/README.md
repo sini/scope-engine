@@ -22,10 +22,10 @@ This is the SQL equivalent of the [nest-traits](../nest-traits/) template's CSS 
 
 ```bash
 # Run all 156 tests
-nix eval --override-input scope-engine ../.. .#tests
+nix eval .#tests
 
 # Explore interactively
-nix repl --override-input scope-engine ../.. .
+nix repl .
 # nix-repl> sql.query "SELECT hostname FROM servers WHERE datacenter = 'us-east-1'"
 ```
 
@@ -746,7 +746,7 @@ templates/sql-schema/
 
 ```bash
 cd scope-engine/templates/sql-schema
-nix eval --override-input scope-engine ../.. .#tests
+nix eval .#tests
 ```
 
 ## References

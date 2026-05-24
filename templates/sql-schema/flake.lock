@@ -15,21 +15,6 @@
         "type": "github"
       }
     },
-    "gen-aspects": {
-      "locked": {
-        "lastModified": 1779386008,
-        "narHash": "sha256-MGEetdwKBBSGAPwmvS3efBb7BJ5e/nSaRu8kaGQYzEA=",
-        "owner": "sini",
-        "repo": "gen-aspects",
-        "rev": "56a50748145c3be056139105b737f19f9c546254",
-        "type": "github"
-      },
-      "original": {
-        "owner": "sini",
-        "repo": "gen-aspects",
-        "type": "github"
-      }
-    },
     "gen-graph": {
       "inputs": {
         "nixpkgs": "nixpkgs"
@@ -117,7 +102,6 @@
     "root": {
       "inputs": {
         "gen": "gen",
-        "gen-aspects": "gen-aspects",
         "gen-graph": "gen-graph",
         "gen-schema": "gen-schema",
         "nixpkgs": "nixpkgs_3",
