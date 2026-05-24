@@ -291,4 +291,81 @@ in
       expected = 80;
     };
   };
+
+  graph = {
+    test-kind-node-count = {
+      expr = graphLib.sizeNodes sql.kindNodes;
+      expected = 21;
+    };
+
+    test-kind-roots = {
+      # Roots: kinds with no incoming import edges
+      expr = sql.kindRoots;
+      expected = graphLib.roots sql.kindNodes;
+    };
+
+    test-kind-self-ref-cycles = {
+      # Self-referential kinds (server.replaces, user.manager, lb.failover)
+      # create kind-level cycles; instance-level graph is acyclic
+      expr = builtins.sort builtins.lessThan sql.kindCycles;
+      expected = [ "loadbalancer" "server" "user" ];
+    };
+
+    test-instance-node-count = {
+      # Total instances across all kinds
+      expr = graphLib.sizeNodes sql.instanceNodes;
+      expected =
+        let
+          counts = lib.mapAttrsToList (_: instances: builtins.length (builtins.attrNames instances)) fleet;
+        in
+        lib.foldl' builtins.add 0 counts;
+    };
+
+    test-instance-no-cycles = {
+      expr = graphLib.cycles sql.instanceNodes;
+      expected = [];
+    };
+
+    test-reachable-from-server = {
+      # From web-1, can reach datacenter, environment, subnet via import edges
+      expr =
+        let
+          reachable = sql.reachableFrom "server:web-1";
+        in
+        builtins.elem "datacenter:us-east-1" reachable
+        && builtins.elem "environment:prod" reachable
+        && builtins.elem "subnet:us-east-1.primary.web" reachable;
+      expected = true;
+    };
+
+    test-dependents-of-datacenter = {
+      # Dependents: things that import us-east-1
+      expr =
+        let
+          deps = sql.dependents "datacenter:us-east-1";
+        in
+        builtins.elem "server:web-1" deps
+        && builtins.elem "network:us-east-1.primary" deps;
+      expected = true;
+    };
+
+    test-select-servers = {
+      expr =
+        let
+          serverNodes = graphLib.select sql.instanceNodes (n: n.type == "server");
+        in
+        builtins.sort builtins.lessThan (builtins.attrNames serverNodes);
+      expected = [ "server:api-1" "server:db-1" "server:web-1" "server:web-2" ];
+    };
+
+    test-service-dependency-chain = {
+      # nginx → api → postgres via service-dependency import edges
+      expr =
+        let
+          reachable = sql.reachableFrom "service-dependency:nginx-proxies-api";
+        in
+        builtins.elem "service:api" reachable && builtins.elem "service:nginx" reachable;
+      expected = true;
+    };
+  };
 }
