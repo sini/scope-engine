@@ -27,7 +27,7 @@ nix eval --override-input scope-engine ../.. .#tests
 # Explore interactively
 nix repl --override-input scope-engine ../.. .
 # nix-repl> :l .#sql
-# nix-repl> sql.query sql.rawFleet "SELECT hostname FROM servers WHERE datacenter = 'us-east-1'"
+# nix-repl> sql.query "SELECT hostname FROM servers WHERE datacenter = 'us-east-1'"
 ```
 
 ## Showcase
@@ -36,15 +36,17 @@ Everything below is evaluated from a single Nix expression. 21 schema kinds, 52 
 
 ### Query raw infrastructure with SQL
 
+All examples below use `sql.query` in a `nix repl` session after `:l .#sql`.
+
 ```nix
 # What servers are in us-east-1?
-query fleet "SELECT hostname, cores, ram_gb FROM servers WHERE datacenter = 'us-east-1'"
+sql.query "SELECT hostname, cores, ram_gb FROM servers WHERE datacenter = 'us-east-1'"
 # → [ { hostname = "web-1"; cores = 4; ram_gb = 8; }
 #     { hostname = "web-2"; cores = 4; ram_gb = 8; }
 #     { hostname = "db-1";  cores = 8; ram_gb = 32; } ]
 
 # Multi-hop JOIN: what ports are exposed on which servers?
-query fleet ''
+sql.query ''
   SELECT s.hostname, svc.name, p.number
   FROM servers s
   JOIN services svc ON svc.server = s.name
@@ -56,20 +58,20 @@ query fleet ''
 #     { hostname = "api-1"; name = "api";   number = 50051; } ]
 
 # Comparison operators: high-spec servers
-query fleet "SELECT hostname, cores, ram_gb FROM servers WHERE cores > 4 AND ram_gb >= 16"
+sql.query "SELECT hostname, cores, ram_gb FROM servers WHERE cores > 4 AND ram_gb >= 16"
 # → [ { hostname = "db-1"; cores = 8; ram_gb = 32; }
 #     { hostname = "api-1"; cores = 4; ram_gb = 16; } ]
 
 # LIKE with wildcards: servers matching a name pattern
-query fleet "SELECT hostname FROM servers WHERE hostname LIKE 'web%'"
+sql.query "SELECT hostname FROM servers WHERE hostname LIKE 'web%'"
 # → [ { hostname = "web-1"; } { hostname = "web-2"; } ]
 
 # Privileged ports
-query fleet "SELECT number, protocol FROM ports WHERE number < 1024"
+sql.query "SELECT number, protocol FROM ports WHERE number < 1024"
 # → [ { number = 80; protocol = "tcp"; } { number = 443; protocol = "tcp"; } ]
 
 # Cross-domain: who has sudo access?
-query fleet ''
+sql.query ''
   SELECT u.name, u.shell, r.permissions
   FROM users u
   JOIN ldap_roles r ON u.ldap_role = r.name
@@ -78,8 +80,12 @@ query fleet ''
 # → [ { name = "alice"; shell = "/bin/zsh"; permissions = ["sudo" "deploy" "restart"]; } ]
 
 # NULL checks: servers that are replacements
-query fleet "SELECT hostname FROM servers WHERE replaces IS NOT NULL"
+sql.query "SELECT hostname FROM servers WHERE replaces IS NOT NULL"
 # → [ { hostname = "web-2"; } ]
+
+# ORDER BY + LIMIT
+sql.query "SELECT hostname, cores FROM servers ORDER BY cores LIMIT 2"
+# → [ { hostname = "web-1"; cores = 4; } { hostname = "web-2"; cores = 4; } ]
 ```
 
 ### Validate with refinement contracts
