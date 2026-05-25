@@ -123,6 +123,33 @@ let
     else
       inherit' { inherit resolve; _visited = _visited // { ${id} = true; }; } self node.parent;
 
+  # Inherited accumulator: walks parent chain collecting ALL values (Neron 2015 §2.4).
+  # Unlike inherit' which returns the first match, inheritAll combines all ancestors.
+  inheritAll =
+    {
+      extract,
+      combine ? a: b: a ++ b,
+      _visited ? { },
+    }:
+    self: id:
+    let
+      node = self.nodes.${id};
+      local = extract node;
+      localResults = if local != null then (if builtins.isList local then local else [ local ]) else [ ];
+    in
+    if _visited ? ${id} then
+      localResults
+    else if node.parent == null then
+      localResults
+    else
+      let
+        parentResults = inheritAll {
+          inherit extract combine;
+          _visited = _visited // { ${id} = true; };
+        } self node.parent;
+      in
+      combine localResults parentResults;
+
   # Parameterized attribute (Sloane 2010 §3, JastAdd).
   paramAttr = f: self: id: param: f self id param;
 
@@ -315,6 +342,7 @@ in
     visibleFrom
     collectionAttr
     inherit'
+    inheritAll
     paramAttr
     circular
     collectImports
