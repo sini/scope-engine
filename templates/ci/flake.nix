@@ -26,6 +26,26 @@
     in
     {
       inherit tests;
+      checks = lib.genAttrs lib.systems.flakeExposed (
+        system:
+        let
+          pkgs = nixpkgs.legacyPackages.${system};
+          assertTests = lib.mapAttrsToList (
+            suite: subtests:
+            lib.mapAttrsToList (
+              name: t:
+              if t.expr == t.expected then true
+              else throw "FAIL ${suite}.${name}: got ${builtins.toJSON t.expr}, expected ${builtins.toJSON t.expected}"
+            ) subtests
+          ) tests;
+        in
+        {
+          default = pkgs.runCommand "gen-scope-tests" { } ''
+            echo "${toString (builtins.length (lib.flatten assertTests))} tests passed"
+            touch $out
+          '';
+        }
+      );
       devShells = lib.genAttrs lib.systems.flakeExposed (
         system:
         let
