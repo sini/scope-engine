@@ -168,6 +168,11 @@ let
       k: declsB ? ${k} && eq k declsA.${k} declsB.${k}
     ) (builtins.attrNames declsA);
 
+  # Convenience: resolve single visible declaration from a scope (Neron §2.3).
+  # Thin wrapper over query — returns the single visible value or null.
+  visibleFrom = dataFilter: self: nodeId:
+    query { inherit dataFilter; } self nodeId;
+
   # Global collection (WARNING: iterates all nodes — prefer collectImports).
   collect =
     {
@@ -262,6 +267,7 @@ in
     query
     queryAll
     ambiguous
+    visibleFrom
     inherit'
     paramAttr
     circular
