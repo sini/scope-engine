@@ -98,21 +98,56 @@ let
           else attributes.${attrName} self id  # fallback (shouldn't happen)
         );
 
-      # Tier 2: materialized flat map (forces full tree, all memoized).
-      # O(n) — each node computed once. Use for gen-graph queries, diagrams, fleet ops.
-      allNodes = let
-        walkFrom = id:
-          let
-            children =
-              if attributes ? "children" then self.get id "children"
-              else {};
-            derived =
-              if attributes ? "derived-children" then self.get id "derived-children"
-              else {};
-            all = children // derived;
-          in [{ name = id; value = self.node id; }]
-             ++ lib.concatMap walkFrom (builtins.attrNames all);
-      in lib.listToAttrs (lib.concatMap walkFrom (builtins.attrNames roots));
+      # --- Tier 2: Materialization (forces evaluation, memoized) ---
+
+      # Internal: walk children/derived-children from a node.
+      _walkFrom = id:
+        let
+          children =
+            if attributes ? "children" then self.get id "children"
+            else {};
+          derived =
+            if attributes ? "derived-children" then self.get id "derived-children"
+            else {};
+          all = children // derived;
+        in [{ name = id; value = self.node id; }]
+           ++ lib.concatMap self._walkFrom (builtins.attrNames all);
+
+      # Full tree materialization. Forces all children attributes recursively.
+      # O(n) — each node computed once. Use for gen-graph global ops, diagrams.
+      allNodes = lib.listToAttrs (lib.concatMap self._walkFrom (builtins.attrNames roots));
+
+      # Selective materialization: forces only nodes matching a predicate.
+      # Predicate receives structural node data. Descends into ALL children
+      # but only INCLUDES matching nodes in the result.
+      # O(n) walk but result size ≤ matching nodes.
+      allNodesWhere = pred:
+        let
+          walkFrom = id:
+            let
+              node = self.node id;
+              children =
+                if attributes ? "children" then self.get id "children"
+                else {};
+              derived =
+                if attributes ? "derived-children" then self.get id "derived-children"
+                else {};
+              all = children // derived;
+              childResults = lib.concatMap walkFrom (builtins.attrNames all);
+            in (if pred node then [{ name = id; value = node; }] else [])
+               ++ childResults;
+        in lib.listToAttrs (lib.concatMap walkFrom (builtins.attrNames roots));
+
+      # Subtree materialization: forces only the subtree rooted at a given node.
+      # O(subtree size). Does not touch nodes outside the subtree.
+      subtreeOf = rootId:
+        lib.listToAttrs (self._walkFrom rootId);
+
+      # Type-targeted materialization: all nodes of a given type.
+      # Walks full tree but only includes matching types.
+      # O(n) walk, result size = nodes of that type.
+      nodesOfType = type:
+        self.allNodesWhere (node: node.type == type);
     });
 
   # Diagnostic variant with shadow-stack cycle tracing.

@@ -119,5 +119,69 @@ in
       expr = builtins.tryEval (result.node "ghost");
       expected = { success = false; value = false; };
     };
+
+    # --- Tier 2 selective materialization ---
+
+    test-subtreeOf = {
+      expr = let
+        roots = {
+          "env:prod" = { id = "env:prod"; type = "env"; parent = null; decls = { hosts = ["web"]; }; };
+          "env:dev" = { id = "env:dev"; type = "env"; parent = null; decls = { hosts = ["dev-1"]; }; };
+        };
+        attributes = {
+          children = self: id:
+            let n = self.node id; in
+            lib.listToAttrs (map (h: {
+              name = "host:${h}@${id}";
+              value = { id = "host:${h}@${id}"; type = "host"; parent = id; decls = {}; };
+            }) (n.decls.hosts or []));
+        };
+        parseParent = id: let parts = lib.splitString "@" id; in
+          if builtins.length parts > 1 then lib.concatStringsSep "@" (lib.drop 1 parts) else null;
+        result = engine.eval { inherit roots attributes parseParent; };
+      in builtins.sort builtins.lessThan (builtins.attrNames (result.subtreeOf "env:prod"));
+      expected = [ "env:prod" "host:web@env:prod" ];
+    };
+
+    test-nodesOfType = {
+      expr = let
+        roots = {
+          "env:prod" = { id = "env:prod"; type = "env"; parent = null; decls = { hosts = ["web" "db"]; }; };
+        };
+        attributes = {
+          children = self: id:
+            let n = self.node id; in
+            lib.listToAttrs (map (h: {
+              name = "host:${h}@${id}";
+              value = { id = "host:${h}@${id}"; type = "host"; parent = id; decls = {}; };
+            }) (n.decls.hosts or []));
+        };
+        parseParent = id: let parts = lib.splitString "@" id; in
+          if builtins.length parts > 1 then lib.concatStringsSep "@" (lib.drop 1 parts) else null;
+        result = engine.eval { inherit roots attributes parseParent; };
+      in builtins.sort builtins.lessThan (builtins.attrNames (result.nodesOfType "host"));
+      expected = [ "host:db@env:prod" "host:web@env:prod" ];
+    };
+
+    test-allNodesWhere = {
+      expr = let
+        roots = {
+          "env:prod" = { id = "env:prod"; type = "env"; parent = null; decls = { hosts = ["web"]; secure = true; }; };
+          "env:dev" = { id = "env:dev"; type = "env"; parent = null; decls = { hosts = ["dev-1"]; secure = false; }; };
+        };
+        attributes = {
+          children = self: id:
+            let n = self.node id; in
+            lib.listToAttrs (map (h: {
+              name = "host:${h}@${id}";
+              value = { id = "host:${h}@${id}"; type = "host"; parent = id; decls = { secure = n.decls.secure or false; }; };
+            }) (n.decls.hosts or []));
+        };
+        parseParent = id: let parts = lib.splitString "@" id; in
+          if builtins.length parts > 1 then lib.concatStringsSep "@" (lib.drop 1 parts) else null;
+        result = engine.eval { inherit roots attributes parseParent; };
+      in builtins.sort builtins.lessThan (builtins.attrNames (result.allNodesWhere (n: n.decls.secure or false)));
+      expected = [ "env:prod" "host:web@env:prod" ];
+    };
   };
 }
