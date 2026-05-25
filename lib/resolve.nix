@@ -46,7 +46,7 @@ let
       # Transitive imports: follow imported scopes' own imports (Neron §2.5, P*.I*).
       # When false (default), only direct imports are checked (P*.I?).
       transitiveImports ? false,
-      _seen ? [ ],
+      _seen ? { },
     }:
     self: id:
     let
@@ -61,8 +61,8 @@ let
             if transitiveImports then
               let
                 importNode = self.nodes.${importId};
-                nextUnseen = builtins.filter (iid: !(builtins.elem iid seen)) importNode.imports;
-                nextSeen = seen ++ [ importId ];
+                nextUnseen = builtins.filter (iid: !(seen ? ${iid})) importNode.imports;
+                nextSeen = seen // { ${importId} = true; };
               in
               lib.concatMap (collectFromImport nextSeen) nextUnseen
             else
@@ -73,8 +73,8 @@ let
         if lib.hasInfix "I" labelWF then
           let
             # Filter out already-seen imports to prevent cycles (Neron §2.4).
-            unseenImports = builtins.filter (iid: !(builtins.elem iid _seen)) node.imports;
-            results = lib.concatMap (collectFromImport (_seen ++ [ id ])) unseenImports;
+            unseenImports = builtins.filter (iid: !(_seen ? ${iid})) node.imports;
+            results = lib.concatMap (collectFromImport (_seen // { ${id} = true; })) unseenImports;
           in
           if results == [ ] then null
           # For attrset results, shadow-merge (Neron §5). For scalars, first wins
@@ -89,7 +89,7 @@ let
         if lib.hasInfix "P" labelWF && node.parent != null then
           query {
             inherit dataFilter labelWF localShadowsImport importShadowsParent transitiveImports;
-            _seen = _seen ++ node.imports;
+            _seen = _seen // (builtins.listToAttrs (map (id: { name = id; value = true; }) node.imports));
           } self node.parent
         else
           null;
@@ -105,14 +105,14 @@ let
     {
       resolve ? _: null,
       allowParent ? true,
-      _visited ? [ ],
+      _visited ? { },
     }:
     self: id:
     let
       node = self.nodes.${id};
       result = resolve node;
     in
-    if builtins.elem id _visited then
+    if _visited ? ${id} then
       throw "gen-scope: parent cycle detected at '${id}' (parent relation must be well-founded, Neron §2.2)"
     else if result != null then
       result
@@ -121,7 +121,7 @@ let
     else if node.parent == null then
       null
     else
-      inherit' { inherit resolve; _visited = _visited ++ [ id ]; } self node.parent;
+      inherit' { inherit resolve; _visited = _visited // { ${id} = true; }; } self node.parent;
 
   # Parameterized attribute (Sloane 2010 §3, JastAdd).
   paramAttr = f: self: id: param: f self id param;
@@ -221,13 +221,13 @@ let
       dataFilter,
       labelWF ? "PI",
       transitiveImports ? false,
-      _seen ? [ ],
+      _seen ? { },
     }:
     self: id:
     let
       node = self.nodes.${id};
       local = dataFilter node;
-      unseenImports = builtins.filter (iid: !(builtins.elem iid _seen)) node.imports;
+      unseenImports = builtins.filter (iid: !(_seen ? ${iid})) node.imports;
       collectFromImportAll = seen: importId:
         let
           v = dataFilter self.nodes.${importId};
@@ -236,8 +236,8 @@ let
             if transitiveImports then
               let
                 importNode = self.nodes.${importId};
-                nextUnseen = builtins.filter (iid: !(builtins.elem iid seen)) importNode.imports;
-                nextSeen = seen ++ [ importId ];
+                nextUnseen = builtins.filter (iid: !(seen ? ${iid})) importNode.imports;
+                nextSeen = seen // { ${importId} = true; };
               in
               lib.concatMap (collectFromImportAll nextSeen) nextUnseen
             else
@@ -246,14 +246,14 @@ let
         direct ++ transitive;
       importResults =
         if lib.hasInfix "I" labelWF then
-          lib.concatMap (collectFromImportAll (_seen ++ [ id ])) unseenImports
+          lib.concatMap (collectFromImportAll (_seen // { ${id} = true; })) unseenImports
         else
           [ ];
       parentResults =
         if lib.hasInfix "P" labelWF && node.parent != null then
           queryAll {
             inherit dataFilter labelWF transitiveImports;
-            _seen = _seen ++ node.imports;
+            _seen = _seen // (builtins.listToAttrs (map (id: { name = id; value = true; }) node.imports));
           } self node.parent
         else
           [ ];
