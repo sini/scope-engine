@@ -65,8 +65,9 @@ let
   #
   # Trade-off: defeats Nix's native memoization — every get call creates a
   # new self with a longer _visited list, so the same (id, attrName) pair
-  # may be evaluated multiple times along different call paths. Use eval
-  # for production; evalDebug for diagnosing cycles.
+  # may be evaluated multiple times along different call paths. List-based
+  # _visited is intentional here: ordered traces need sequence, and perf
+  # is already sacrificed for diagnostics. Use eval for production.
   evalDebug =
     {
       baseNodes,

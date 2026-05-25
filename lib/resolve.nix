@@ -226,10 +226,10 @@ let
         else if traverse == "ancestors" then
           let
             go =
-              nid:
-              if nid == null then [ ] else [ nid ] ++ go self.nodes.${nid}.parent;
+              visited: nid:
+              if nid == null || visited ? ${nid} then [ ] else [ nid ] ++ go (visited // { ${nid} = true; }) self.nodes.${nid}.parent;
           in
-          go self.nodes.${id}.parent
+          go { ${id} = true; } self.nodes.${id}.parent
         else if lib.hasPrefix "label:" traverse then
           self.nodes.${id}.edgesByLabel.${lib.removePrefix "label:" traverse} or [ ]
         else

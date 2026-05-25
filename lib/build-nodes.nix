@@ -36,9 +36,11 @@ let
         // edgeGraphs;
 
       # Collect all vertices across all edge graphs.
-      allVertices = lib.unique (
-        lib.concatMap (label: allEdgeGraphs.${label}.vertices) (builtins.attrNames allEdgeGraphs)
-      );
+      allVertices = builtins.attrNames (builtins.listToAttrs (
+        lib.concatMap (label:
+          map (v: { name = v; value = true; }) allEdgeGraphs.${label}.vertices
+        ) (builtins.attrNames allEdgeGraphs)
+      ));
 
       # Pre-index edges by label, grouped by from and to.
       edgeIndex = lib.mapAttrs (
