@@ -53,8 +53,8 @@ let
     vs:
     if vs == [ ] then empty
     else path (vs ++ [ (builtins.head vs) ]);
-  # Mokhov 2017 §5.1 defines star as center→leaves. Inverted here: leaves→center,
-  # matching scope-graph convention where parent edges point from child to parent.
+  # Mokhov 2017 §5.1 defines star as center→leaves. Inverted here: leaves→center.
+  # Convention: parent edges point from child to parent.
   star = center: leaves: connect (vertices leaves) (vertex center);
   clique = vs: builtins.foldl' connect empty (map vertex vs);
   # Construct graph from recursive tree structure (Mokhov 2017 §5.1).

@@ -275,7 +275,7 @@ let
     label: extract: self: id:
     lib.concatMap (targetId: extract self targetId) (followEdge label self id);
 
-  # Ambiguity detection (spec Open Question #3, van Antwerpen 2018).
+  # Ambiguity detection (van Antwerpen 2018 §2.3).
   # Returns true when multiple declarations are reachable and none shadows the other.
   # Uses queryAll to find all reachable results and checks for duplicates.
   ambiguous =

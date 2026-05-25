@@ -5,6 +5,33 @@
 # builtins.addErrorContext on every get call provides breadcrumbs for cycle errors.
 { lib }:
 let
+  # Synthesis convergence loop (Vogt 1989).
+  # Iterates until no new nodes are produced.
+  runSynthesis =
+    {
+      baseNodes,
+      synthesize,
+      maxSynthIter,
+      evaluated,
+    }:
+    let
+      go =
+        n: prevSynth:
+        if n >= maxSynthIter then
+          throw "gen-scope: synthesis exceeded ${toString maxSynthIter} iterations (Vogt well-definedness)"
+        else
+          let
+            allNodes = baseNodes // prevSynth;
+            input = {
+              nodes = allNodes;
+              inherit evaluated;
+            };
+            newSynth = builtins.removeAttrs (synthesize input) (builtins.attrNames allNodes);
+          in
+          if newSynth == { } then prevSynth else go (n + 1) (prevSynth // newSynth);
+    in
+    go 0 { };
+
   eval =
     {
       baseNodes,
@@ -15,25 +42,10 @@ let
     lib.fix (
       self:
       let
-        # Synthesize sees all current nodes + evaluated for attribute access.
-        # Convergence loop: iterate until no new nodes are produced (Vogt 1989).
-        # synthesize MUST NOT read evaluated attributes of nodes it creates in
-        # the same or later iteration — only base/previously-converged nodes.
-        synthesized =
-          let
-            go = n: prevSynth:
-              if n >= maxSynthIter then
-                throw "gen-scope: synthesis exceeded ${toString maxSynthIter} iterations (Vogt well-definedness)"
-              else
-                let
-                  allNodes = baseNodes // prevSynth;
-                  input = { nodes = allNodes; inherit (self) evaluated; };
-                  newSynth = builtins.removeAttrs (synthesize input) (builtins.attrNames allNodes);
-                in
-                if newSynth == {} then prevSynth
-                else go (n + 1) (prevSynth // newSynth);
-          in
-          go 0 {};
+        synthesized = runSynthesis {
+          inherit baseNodes synthesize maxSynthIter;
+          inherit (self) evaluated;
+        };
       in
       {
         # Synthesized nodes add to the graph; cannot overwrite base nodes.
@@ -54,7 +66,7 @@ let
       }
     );
 
-  # Diagnostic variant with shadow-stack cycle tracing (spec Open Question #2/#5).
+  # Diagnostic variant with shadow-stack cycle tracing (van Antwerpen 2018).
   #
   # Threads a _visited list through self so that cycles produce structured
   # traces like "gen-scope: cycle: a.x -> b.x -> a.x" instead of Nix's
@@ -73,24 +85,13 @@ let
       baseNodes,
       synthesize ? (_: { }),
       attributes,
+      maxSynthIter ? 10,
     }:
     let
-      maxSynthIter = 10;
-      synthesized =
-        let
-          go = n: prevSynth:
-            if n >= maxSynthIter then
-              throw "gen-scope: synthesis exceeded ${toString maxSynthIter} iterations (Vogt well-definedness)"
-            else
-              let
-                allNodes = baseNodes // prevSynth;
-                input = { nodes = allNodes; evaluated = result.evaluated; };
-                newSynth = builtins.removeAttrs (synthesize input) (builtins.attrNames allNodes);
-              in
-              if newSynth == {} then prevSynth
-              else go (n + 1) (prevSynth // newSynth);
-        in
-        go 0 {};
+      synthesized = runSynthesis {
+        inherit baseNodes synthesize maxSynthIter;
+        evaluated = result.evaluated;
+      };
       nodes = baseNodes // synthesized;
 
       mkEvaluated =

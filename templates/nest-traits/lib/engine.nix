@@ -61,7 +61,7 @@ let
       # Phase 2: Trait synth
       synthesizedNodes = synthesizeNodes traits expandedNodes;
 
-      # Build scope-engine graph for structural queries
+      # Build gen-scope graph for structural queries
       synthGraph = dom.buildDomGraph synthesizedNodes;
 
       # Phase 3: Rule annotation

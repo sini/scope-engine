@@ -11,9 +11,19 @@ let
   ancestors =
     self: id:
     let
-      p = self.nodes.${id}.parent;
+      go =
+        visited: nid:
+        let
+          p = self.nodes.${nid}.parent;
+        in
+        if p == null then
+          [ ]
+        else if visited ? ${p} then
+          throw "gen-scope: ancestors: cycle detected at '${p}'"
+        else
+          [ p ] ++ go (visited // { ${p} = true; }) p;
     in
-    if p == null then [ ] else [ p ] ++ ancestors self p;
+    go { ${id} = true; } id;
 
   siblings =
     self: id:
@@ -25,9 +35,20 @@ let
   descendants =
     self: id:
     let
-      direct = self.nodes.${id}.childrenIds;
+      go =
+        visited: nid:
+        let
+          direct = self.nodes.${nid}.childrenIds;
+        in
+        lib.concatMap (
+          cid:
+          if visited ? ${cid} then
+            throw "gen-scope: descendants: cycle detected at '${cid}'"
+          else
+            [ cid ] ++ go (visited // { ${cid} = true; }) cid
+        ) direct;
     in
-    direct ++ lib.concatMap (cid: descendants self cid) direct;
+    go { ${id} = true; } id;
 
   isAncestor = self: ancestorId: id: builtins.elem ancestorId (ancestors self id);
 

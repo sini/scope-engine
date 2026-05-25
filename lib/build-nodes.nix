@@ -11,8 +11,8 @@ let
 
   # Build flat node map from labeled algebraic graphs (Mokhov §7).
   # Supports scoped relations (van Antwerpen 2018 §2.1): multiple named
-  # relations per scope via `relations` parameter. `decls` is the default
-  # ":" relation for backwards compatibility.
+  # relations per scope via `relations` parameter. `decls` populates the
+  # default ":" relation per node.
   buildNodes =
     {
       parentGraph ? graph.empty,
@@ -79,7 +79,7 @@ let
             throw "gen-scope: node '${id}' has ${toString (builtins.length targets)} parent edges (P must be a partial function, Neron §2.2)"
           else if targets != [ ] then builtins.head targets
           else null;
-        # Backwards-compatible: imports from I edges.
+        # Convenience: import targets from I edges.
         imports = edgeTargets "I" id;
         decls = decls.${id} or { };
         # Scoped relations: { relationName → data } per node.
@@ -89,7 +89,7 @@ let
           in
           lib.optionalAttrs (d != { }) { ":" = d; }
         );
-        # Backwards-compatible: children from P edges (reverse).
+        # Convenience: children from P edges (reverse).
         childrenIds = edgeSources "P" id;
         # All labeled edges from this node: { label → [targetId] }.
         # Includes P, I, and any custom labels.
