@@ -1,102 +1,66 @@
-# Scope graph construction from labeled algebraic graphs.
+# Scope graph construction: produces minimal root descriptors from algebraic graphs.
 #
-# Builds a flat node map from separate parent and import edge graphs.
-# Construction complexity: O(V + E) via pre-indexed edge grouping.
-#
-# Supports custom edge labels (van Antwerpen 2018 §2.1) via edgeGraphs.
-# The parentGraph/importGraph API is sugar for edgeGraphs.P / edgeGraphs.I.
+# Output shape: { id = { id, type, parent, decls }; }
+# No pre-indexed edges — relationships are computed via attributes.
+# Edge declarations stored in decls.__edges for consumers to use in attribute definitions.
 { lib }:
 let
   graph = import ./graph.nix;
 
-  # Build flat node map from labeled algebraic graphs (Mokhov §7).
-  # Supports scoped relations (van Antwerpen 2018 §2.1): multiple named
-  # relations per scope via `relations` parameter. `decls` populates the
-  # default ":" relation per node.
   buildNodes =
     {
       parentGraph ? graph.empty,
       importGraph ? graph.empty,
-      # Custom edge labels: { labelName → algebraicGraph }.
-      # P and I are populated from parentGraph/importGraph if not provided here.
-      edgeGraphs ? { },
-      decls ? { },
-      types ? { },
-      relations ? { },
+      edgeGraphs ? {},
+      decls ? {},
+      types ? {},
+      strict ? true,
     }:
     let
-      # Merge explicit edgeGraphs with parentGraph/importGraph sugar.
+      # Merge all edge graphs for vertex collection
       allEdgeGraphs =
-        (lib.optionalAttrs (parentGraph.vertices != [ ] || parentGraph.edges != [ ]) {
-          P = parentGraph;
-        })
-        // (lib.optionalAttrs (importGraph.vertices != [ ] || importGraph.edges != [ ]) {
-          I = importGraph;
-        })
+        (lib.optionalAttrs (parentGraph.vertices != [] || parentGraph.edges != []) { P = parentGraph; })
+        // (lib.optionalAttrs (importGraph.vertices != [] || importGraph.edges != []) { I = importGraph; })
         // edgeGraphs;
 
-      # Collect all vertices across all edge graphs.
+      # Collect all vertices: from edge graphs + decls + types keys (O(n) dedup via attrset)
       allVertices = builtins.attrNames (builtins.listToAttrs (
         lib.concatMap (label:
           map (v: { name = v; value = true; }) allEdgeGraphs.${label}.vertices
         ) (builtins.attrNames allEdgeGraphs)
+        ++ map (v: { name = v; value = true; }) (builtins.attrNames decls)
+        ++ map (v: { name = v; value = true; }) (builtins.attrNames types)
       ));
 
-      # Pre-index edges by label, grouped by from and to.
-      edgeIndex = lib.mapAttrs (
-        _label: g: {
-          byFrom = builtins.groupBy (e: e.from) g.edges;
-          byTo = builtins.groupBy (e: e.to) g.edges;
-        }
-      ) allEdgeGraphs;
+      # Pre-index P edges by source (child → parent).
+      # Uses groupBy (O(E)) then validates partial function constraint.
+      # strict=true: deepSeq forces all validations upfront (errors surface immediately).
+      # strict=false: validation is lazy (errors surface only when conflicting node's parent is accessed).
+      parentIndex = let
+        grouped = builtins.groupBy (e: e.from) (allEdgeGraphs.P.edges or []);
+        validated = lib.mapAttrs (from: edges:
+          if builtins.length edges > 1
+          then throw "gen-scope: node '${from}' has ${toString (builtins.length edges)} parent edges (P must be a partial function, Neron §2.2). If this node should exist under multiple parents, use distinct IDs (e.g., '${from}@parent1', '${from}@parent2')."
+          else (builtins.head edges).to
+        ) grouped;
+      in if strict then builtins.deepSeq validated validated
+      else validated;
 
-      # Helper: get targets of edges from a node for a given label.
-      edgeTargets = label: id:
-        if edgeIndex ? ${label} then
-          map (e: e.to) (edgeIndex.${label}.byFrom.${id} or [ ])
-        else
-          [ ];
-
-      # Helper: get sources of edges to a node for a given label.
-      edgeSources = label: id:
-        if edgeIndex ? ${label} then
-          map (e: e.from) (edgeIndex.${label}.byTo.${id} or [ ])
-        else
-          [ ];
-
+      # Pre-index all non-P edges by source, grouped by label
+      edgeIndex = lib.mapAttrs (_label: g:
+        builtins.foldl' (acc: e:
+          acc // { ${e.from} = (acc.${e.from} or []) ++ [ e.to ]; }
+        ) {} g.edges
+      ) (builtins.removeAttrs allEdgeGraphs [ "P" ]);
     in
-    lib.genAttrs allVertices (
-      id:
-      {
-        inherit id;
-        type = types.${id} or null;
-        # Parent from P edges. P(S) is a partial function (Neron §2.2) — at most one parent.
-        parent =
-          let
-            targets = edgeTargets "P" id;
-          in
-          if builtins.length targets > 1 then
-            throw "gen-scope: node '${id}' has ${toString (builtins.length targets)} parent edges (P must be a partial function, Neron §2.2)"
-          else if targets != [ ] then builtins.head targets
-          else null;
-        # Convenience: import targets from I edges.
-        imports = edgeTargets "I" id;
-        decls = decls.${id} or { };
-        # Scoped relations: { relationName → data } per node.
-        rels = (relations.${id} or { }) // (
-          let
-            d = decls.${id} or { };
-          in
-          lib.optionalAttrs (d != { }) { ":" = d; }
-        );
-        # Convenience: children from P edges (reverse).
-        childrenIds = edgeSources "P" id;
-        # All labeled edges from this node: { label → [targetId] }.
-        # Includes P, I, and any custom labels.
-        edgesByLabel = lib.mapAttrs (label: _: edgeTargets label id) allEdgeGraphs;
-      }
-    );
+    builtins.seq parentIndex (lib.genAttrs allVertices (id: {
+      inherit id;
+      type = types.${id} or null;
+      parent = parentIndex.${id} or null;
+      decls = (decls.${id} or {}) // {
+        # Store edge declarations for consumers to build computed attributes from
+        __edges = lib.mapAttrs (label: idx: idx.${id} or []) edgeIndex;
+      };
+    }));
 in
-{
-  inherit buildNodes;
-}
+{ inherit buildNodes; }

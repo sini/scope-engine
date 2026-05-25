@@ -1,0 +1,7 @@
+system := `nix-instantiate --eval --raw -E builtins.currentSystem`
+
+ci test="" *args="":
+  nix-unit --override-input gen-scope ../.. --flake .#.tests{{if test != "" { "." + test } else { "" }}} --gc-roots-dir .gcroots {{args}}
+
+repl:
+  nix repl --override-input gen-scope ../.. .

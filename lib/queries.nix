@@ -1,73 +1,47 @@
-# Structural queries on the flat node map.
-# These never trigger attribute evaluation — safe to call during HOAG synthesis.
+# Structural queries as thin wrappers over self.node and self.get.
+#
+# parent is structural (on the node). children, ancestors, descendants,
+# siblings are derived via computed attributes (self.get id "children").
 { lib }:
 let
-  parent = self: id: self.nodes.${id}.parent;
+  parent = self: id: (self.node id).parent;
 
-  children = self: id: lib.genAttrs self.nodes.${id}.childrenIds (cid: self.nodes.${cid});
+  children = self: id: self.get id "children";
 
-  childrenIds = self: id: self.nodes.${id}.childrenIds;
+  childrenIds = self: id: builtins.attrNames (self.get id "children");
 
-  ancestors =
-    self: id:
+  ancestors = self: id:
     let
-      go =
-        visited: nid:
-        let
-          p = self.nodes.${nid}.parent;
-        in
-        if p == null then
-          [ ]
-        else if visited ? ${p} then
-          throw "gen-scope: ancestors: cycle detected at '${p}'"
-        else
-          [ p ] ++ go (visited // { ${p} = true; }) p;
-    in
-    go { ${id} = true; } id;
+      go = visited: nid:
+        let p = (self.node nid).parent;
+        in if p == null then []
+        else if visited ? ${p} then []
+        else [ p ] ++ go (visited // { ${p} = true; }) p;
+    in go { ${id} = true; } id;
 
-  siblings =
-    self: id:
-    let
-      p = self.nodes.${id}.parent;
-    in
-    if p == null then [ ] else builtins.filter (cid: cid != id) self.nodes.${p}.childrenIds;
+  siblings = self: id:
+    let p = (self.node id).parent;
+    in if p == null then []
+    else builtins.filter (cid: cid != id) (builtins.attrNames (self.get p "children"));
 
-  descendants =
-    self: id:
+  descendants = self: id:
     let
-      go =
-        visited: nid:
-        let
-          direct = self.nodes.${nid}.childrenIds;
-        in
-        lib.concatMap (
-          cid:
-          if visited ? ${cid} then
-            throw "gen-scope: descendants: cycle detected at '${cid}'"
-          else
-            [ cid ] ++ go (visited // { ${cid} = true; }) cid
-        ) direct;
-    in
-    go { ${id} = true; } id;
+      go = visited: nid:
+        let cids = builtins.attrNames (self.get nid "children");
+        in lib.concatMap (cid:
+          if visited ? ${cid} then []
+          else [ cid ] ++ go (visited // { ${cid} = true; }) cid
+        ) cids;
+    in go { ${id} = true; } id;
 
   isAncestor = self: ancestorId: id: builtins.elem ancestorId (ancestors self id);
 
   isDescendant = self: descendantId: id: builtins.elem descendantId (descendants self id);
 
-  # Return all nodes of a given type as an attrset.
   nodesByType = self: type:
-    lib.filterAttrs (_: n: n.type == type) self.nodes;
+    lib.filterAttrs (_: n: n.type == type) self.allNodes;
 in
 {
-  inherit
-    parent
-    children
-    childrenIds
-    ancestors
-    siblings
-    descendants
-    isAncestor
-    isDescendant
-    nodesByType
-    ;
+  inherit parent children childrenIds ancestors siblings descendants
+    isAncestor isDescendant nodesByType;
 }

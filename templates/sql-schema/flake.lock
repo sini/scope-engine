@@ -2,11 +2,11 @@
   "nodes": {
     "gen": {
       "locked": {
-        "lastModified": 1779589603,
-        "narHash": "sha256-PQYbcQ029MrQepssntNoJNqcX3G5Adth+2RarWUFkT4=",
+        "lastModified": 1779682607,
+        "narHash": "sha256-AOKtTVMsEuF327yAuf0gIgoBLNmxCP0RjvmdkNcp2t8=",
         "owner": "sini",
         "repo": "gen",
-        "rev": "96b50e0a4cfab8970c4c9b1f101d3cd6b05c9022",
+        "rev": "3c1f38835fa12ca954d0fbaacb4ad692c109d947",
         "type": "github"
       },
       "original": {
@@ -20,11 +20,11 @@
         "nixpkgs": "nixpkgs"
       },
       "locked": {
-        "lastModified": 1779589643,
-        "narHash": "sha256-oVDRbhZZa1k6ZW1aBhQZE1npoW6oSaJJ7GMqlPabvpI=",
+        "lastModified": 1779682980,
+        "narHash": "sha256-TUE0dUCMOr18etJ5x+HDRIjxyRie62jIKRO7LADw0Oc=",
         "owner": "sini",
         "repo": "gen-graph",
-        "rev": "fc331b8c3f4bce430655c19640d9250876a7aba0",
+        "rev": "98fc091684093fb0d018ed0ddada8313270c1945",
         "type": "github"
       },
       "original": {
@@ -38,16 +38,31 @@
         "nixpkgs": "nixpkgs_2"
       },
       "locked": {
-        "lastModified": 1779589474,
-        "narHash": "sha256-D2jNpsOe+Qci83/EOe1wGZGJ801FWy3qQVbREFcMhjw=",
+        "lastModified": 1779682984,
+        "narHash": "sha256-kXusOmg6kpwRx9IJr4B0sy1SlUOhinbiqesnKRh44bQ=",
         "owner": "sini",
         "repo": "gen-schema",
-        "rev": "4b13bd675d52f40c7cc8693a70e12bd5b05d1f46",
+        "rev": "ee478e438b59a0af3233b39ddd18f50677d998a9",
         "type": "github"
       },
       "original": {
         "owner": "sini",
         "repo": "gen-schema",
+        "type": "github"
+      }
+    },
+    "gen-scope": {
+      "locked": {
+        "lastModified": 1779682975,
+        "narHash": "sha256-Xki8XVXDI9RADEmveeWDGCgpnkuXnRINc0eZvt/rFyg=",
+        "owner": "sini",
+        "repo": "gen-scope",
+        "rev": "9c28e5612c5bf562c673748620c87be259e9d81a",
+        "type": "github"
+      },
+      "original": {
+        "owner": "sini",
+        "repo": "gen-scope",
         "type": "github"
       }
     },
@@ -104,23 +119,8 @@
         "gen": "gen",
         "gen-graph": "gen-graph",
         "gen-schema": "gen-schema",
-        "nixpkgs": "nixpkgs_3",
-        "scope-engine": "scope-engine"
-      }
-    },
-    "scope-engine": {
-      "locked": {
-        "lastModified": 1779603717,
-        "narHash": "sha256-7CWUDNJ4t5n7WFNvKKP5slt7vO0oB9MHUWwSN9LiRv4=",
-        "owner": "sini",
-        "repo": "scope-engine",
-        "rev": "d6b94529304a4f7bb06988e7b53669e52fb97dfb",
-        "type": "github"
-      },
-      "original": {
-        "owner": "sini",
-        "repo": "scope-engine",
-        "type": "github"
+        "gen-scope": "gen-scope",
+        "nixpkgs": "nixpkgs_3"
       }
     }
   },

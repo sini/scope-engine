@@ -1,19 +1,29 @@
 # gen-scope
 
-Demand-driven attribute grammar evaluator over algebraic scope graphs, implemented as a pure Nix library.
+Demand-driven Higher-Order Attribute Grammar evaluator over algebraic scope graphs, implemented as a pure Nix library.
 
 gen-scope is a **hybrid HOAG/RAG** evaluator: Higher-Order Attribute Grammars (Vogt et al., 1989) for dynamic node synthesis, Reference Attribute Grammars (Hedin, 2000) for cross-node references via import edges. It leverages Nix's native lazy evaluation for attribute computation, memoization, and cycle detection — we do not build an AG evaluator, Nix **is** the evaluator.
 
 gen-scope is generic. It has no knowledge of NixOS, aspects, policies, or system configuration. It provides evaluation machinery; consumers define what to compute.
 
+## Core Insight
+
+Nix attrset VALUES are lazy but KEYS are eager. Function application is never memoized. The only way to get O(1) attribute access is an attrset entry.
+
+**The solution:** Co-locate the memoization cache (`_eval`) ON each node. When a parent's `children` attribute materializes child nodes, each child is wrapped with `_eval` — a lazy attrset of that child's attribute computations. The cache is distributed across the tree, not centralized.
+
 ## Terminology
 
 | Term | Definition |
 |------|-----------|
-| Nodes | Scope graph vertices built by `buildNodes` |
-| Edges | Labeled relationships: P (parent/lexical), I (import/composition), custom |
-| Attributes | Computed values on nodes — demand-driven, memoized by Nix laziness |
-| Combinators | Attribute constructors: inherit', circular, paramAttr, collectionAttr, query |
+| Nodes | Minimal descriptors: `{ id, type, parent, decls }` |
+| Roots | Entry-point nodes (from `buildNodes` or hand-written) |
+| Children | Synthesized nodes produced by the `children` attribute |
+| Derived Children | Synthesized nodes from `derived-children` (can read sibling attrs) |
+| Attributes | Computed values on nodes — demand-driven, memoized via `_eval` |
+| Combinators | Attribute constructors: `inherit'`, `circular`, `paramAttr`, `collectionAttr`, `query` |
+| Tier 1 | Navigation: `self.node id`, `self.get id attrName` — O(1) or O(depth) |
+| Tier 2 | Materialization: `self.allNodes` — O(n), forces full tree |
 
 ## Gen Ecosystem
 
@@ -32,479 +42,317 @@ gen-scope is generic. It has no knowledge of NixOS, aspects, policies, or system
 {
   inputs.gen-scope.url = "github:sini/gen-scope";
   outputs = { gen-scope, nixpkgs, ... }:
-    let
-      engine = gen-scope { lib = nixpkgs.lib; };
+    let engine = gen-scope { lib = nixpkgs.lib; };
     in { /* ... */ };
 }
 
 # Or without flakes:
-let
-  engine = import ./gen-scope { inherit lib; };
+let engine = import ./gen-scope { inherit lib; };
 in { /* ... */ }
 ```
 
 ## Example
 
-A hierarchical configuration system: departments contain teams, teams inherit department config.
+A hierarchical configuration: environments contain hosts, hosts inherit environment config.
 
 ```nix
 let
   engine = import ./gen-scope { inherit lib; };
 
-  # Algebraic graph: departments → teams
-  parentGraph = engine.overlay
-    (engine.vertices [ "dept:eng" "dept:sales" ])
-    (engine.overlay
-      (engine.star "dept:eng" [ "team:platform" "team:frontend" ])
-      (engine.edge "team:field" "dept:sales"));
-
-  baseNodes = engine.buildNodes {
-    inherit parentGraph;
+  roots = engine.buildNodes {
+    parentGraph = engine.overlay
+      (engine.star "env:prod" [ "host:web" "host:db" ])
+      (engine.star "env:dev" [ "host:dev" ]);
     decls = {
-      "dept:eng"      = { budget = 500000; location = "SF"; };
-      "dept:sales"    = { budget = 200000; location = "NYC"; };
-      "team:platform" = { size = 8; focus = "infra"; };
-      "team:frontend" = { size = 5; focus = "ui"; };
-      "team:field"    = { size = 12; focus = "enterprise"; };
+      "env:prod" = { region = "us-east"; isHighSec = true; };
+      "env:dev"  = { region = "eu-west"; isHighSec = false; };
+      "host:web" = { role = "frontend"; };
+      "host:db"  = { role = "database"; };
+      "host:dev" = { role = "all"; };
     };
   };
 
-  attributes = {
-    # Inherited attribute: location flows top-down from department to team
-    location = engine.inherit' {
-      resolve = node: node.decls.location or null;
+  result = engine.eval {
+    inherit roots;
+    attributes = {
+      # Tree stays flat — no children synthesis in this example
+      children = _self: _id: {};
+
+      # Inherited: walks parent chain
+      region = engine.inherit' { resolve = n: n.decls.region or null; };
+
+      # Synthesized: computed from node data
+      greeting = self: id:
+        "hello ${id} in ${self.get id "region"}";
     };
-
-    # Synthesized attribute: headcount rolls up bottom-up from children
-    headcount = self: id:
-      let
-        node = self.nodes.${id};
-        local = node.decls.size or 0;
-        childTotal = lib.foldl'
-          (acc: cid: acc + (self.evaluated.${cid}.get "headcount"))
-          0 node.childrenIds;
-      in local + childTotal;
   };
-
-  result = engine.eval { inherit baseNodes attributes; };
 in {
-  platformLocation = result.evaluated."team:platform".get "location";  # "SF"
-  engHeadcount     = result.evaluated."dept:eng".get "headcount";      # 13
-  salesHeadcount   = result.evaluated."dept:sales".get "headcount";    # 12
+  webRegion = result.get "host:web" "region";     # "us-east"
+  webGreeting = result.get "host:web" "greeting"; # "hello host:web in us-east"
+  devRegion = result.get "host:dev" "region";     # "eu-west"
 }
+```
+
+## HOAG: Dynamic Tree Expansion
+
+The `children` attribute synthesizes new nodes on demand. Attribute-dependent — can read other attributes to decide what to create:
+
+```nix
+let
+  roots = {
+    "env:prod" = {
+      id = "env:prod"; type = "env"; parent = null;
+      decls = { hosts = [ "web-1" "db-1" ]; isHighSec = true; };
+    };
+  };
+
+  result = engine.eval {
+    inherit roots;
+    attributes = {
+      is-high-sec = self: id: (self.node id).decls.isHighSec or false;
+
+      # Children depend on is-high-sec attribute
+      children = self: id:
+        let n = self.node id; in
+        if n.type == "env" then
+          lib.listToAttrs (map (h: {
+            name = "host:${h}@${id}";
+            value = {
+              id = "host:${h}@${id}"; type = "host"; parent = id;
+              decls = {
+                users = [ "root" ] ++ lib.optional (self.get id "is-high-sec") "auditor";
+              };
+            };
+          }) (n.decls.hosts or []))
+        else if n.type == "host" then
+          lib.listToAttrs (map (u: {
+            name = "user:${u}@${id}";
+            value = { id = "user:${u}@${id}"; type = "user"; parent = id; decls = {}; };
+          }) (n.decls.users or []))
+        else {};
+
+      # Inherited security propagates through synthesized nodes
+      inherited-sec = self: id:
+        let n = self.node id; in
+        if n.decls ? isHighSec then n.decls.isHighSec
+        else if n.parent != null then self.get n.parent "inherited-sec"
+        else false;
+    };
+    parseParent = id:
+      let parts = lib.splitString "@" id; in
+      if builtins.length parts > 1 then lib.concatStringsSep "@" (lib.drop 1 parts)
+      else null;
+  };
+in {
+  # Auditor user only on prod (attribute-dependent synthesis)
+  prodUsers = builtins.attrNames (result.get "host:web-1@env:prod" "children");
+  # → [ "user:auditor@host:web-1@env:prod" "user:root@host:web-1@env:prod" ]
+
+  auditorSec = result.get "user:auditor@host:web-1@env:prod" "inherited-sec";
+  # → true
+}
+```
+
+### `derived-children` — Second-Stage Synthesis
+
+`derived-children` can read attributes of nodes produced by `children` (Vogt 1989 §2.4 NTA stratification):
+
+```nix
+attributes = {
+  children = self: id: { ... };
+  derived-children = self: id:
+    let alice = self.get "user:alice@${id}" "resolved-aspects"; in
+    if hasAspect "sudo" alice
+    then { "user:alice-admin@${id}" = { ... }; }
+    else {};
+};
 ```
 
 ## API Reference
 
-### Algebraic Graph Construction
+### `eval`
 
-Four core primitives (Mokhov, 2017) satisfy an algebra similar to a semiring. Overlay is commutative, associative, and idempotent. Connect distributes over overlay.
+```nix
+eval {
+  roots;               # { id = { id, type, parent, decls }; }
+  attributes;          # { attrName = self: id: value; }
+  parseParent ? null;  # id → parentId | null
+}
+```
 
-| Function | Signature | Description |
-|---|---|---|
-| `empty` | `graph` | Empty graph: no vertices, no edges |
-| `vertex` | `string → graph` | Single-vertex graph |
-| `overlay` | `graph → graph → graph` | Union of vertices and edges |
-| `connect` | `graph → graph → graph` | Overlay + cross-product edges from left to right |
+Returns `{ node, get, allNodes }`:
 
-Derived constructors:
+| Function | Cost | Description |
+|----------|------|-------------|
+| `result.node id` | O(1) root, O(depth) synth | Resolve node structural data |
+| `result.get id attrName` | O(1) amortized | Demand-driven attribute access (memoized) |
+| `result.allNodes` | O(n) | Tier 2: flat map of all reachable nodes |
 
-| Function | Signature | Description |
-|---|---|---|
-| `overlays` | `[graph] → graph` | Fold a list of graphs via overlay |
-| `vertices` | `[string] → graph` | Isolated vertices |
-| `edge` | `string → string → graph` | Single directed edge |
-| `edges` | `[{from, to}] → graph` | Multiple edges from a list |
-| `path` | `[string] → graph` | Sequential chain: `a → b → c` |
-| `circuit` | `[string] → graph` | Path with back-edge from last to first |
-| `star` | `string → [string] → graph` | Fan-in: all leaves connect to center |
-| `clique` | `[string] → graph` | Fully connected subgraph |
-| `tree` | `{root, children} → graph` | Recursive tree structure |
-| `forest` | `[{root, children}] → graph` | Multiple trees |
+**Special attributes:** `children` and `derived-children` are auto-wrapped — their results are node attrsets where each child receives a co-located `_eval` cache.
 
-Transformations:
+### `evalDebug`
 
-| Function | Signature | Description |
-|---|---|---|
-| `gmap` | `(a → b) → graph → graph` | Map function over all vertex IDs |
-| `induce` | `(string → bool) → graph → graph` | Subgraph matching predicate |
-| `transpose` | `graph → graph` | Flip all edge directions |
-| `removeVertex` | `string → graph → graph` | Remove a vertex and its edges |
-| `removeEdge` | `string → string → graph → graph` | Remove a specific edge |
-| `hasVertex` | `string → graph → bool` | Vertex membership test |
-| `hasEdge` | `string → string → graph → bool` | Edge membership test |
+Same interface as `eval`. Provides structured cycle traces instead of Nix's opaque "infinite recursion." Trade-off: defeats memoization. Use for diagnosing cycles only.
 
-### Scope Graph Construction
+### `buildNodes`
 
 ```nix
 buildNodes {
-  parentGraph;            # Algebraic graph for parent (P) edges — lexical nesting
-  importGraph ? empty;    # Algebraic graph for import (I) edges — cross-scope visibility
-  edgeGraphs ? {};        # Custom labeled edges: { label → algebraicGraph }
-  decls ? {};             # { nodeId → attrset } — declarations per scope
-  types ? {};             # { nodeId → string } — type tag per scope (e.g., "host", "user")
-  relations ? {};         # { nodeId → { relName → data } } — multiple named relations
+  parentGraph ? empty;   # Algebraic graph for P edges (child → parent)
+  importGraph ? empty;   # Algebraic graph for I edges
+  edgeGraphs ? {};       # Custom labeled edges: { label → graph }
+  decls ? {};            # { nodeId → attrset }
+  types ? {};            # { nodeId → string }
 }
 ```
 
-Returns a flat attrset of nodes. Each node has:
+Returns minimal root descriptors: `{ id = { id, type, parent, decls }; }`.
 
-| Field | Type | Description |
-|---|---|---|
-| `id` | string | Node identifier |
-| `type` | string or null | Type tag from `types` parameter |
-| `parent` | string or null | Parent node ID (from P edges) |
-| `imports` | [string] | Import target IDs (from I edges) |
-| `decls` | attrset | Declarations for this scope |
-| `rels` | attrset | All scoped relations including decls as `":"` |
-| `childrenIds` | [string] | Child node IDs (reverse P edges) |
-| `edgesByLabel` | { label → [string] } | All outgoing edges indexed by label |
+Edge data is stored in `decls.__edges`: `{ I = [...]; customLabel = [...]; }`. Consumers define attributes to interpret these edges:
 
-`parentGraph` and `importGraph` are sugar for `edgeGraphs.P` and `edgeGraphs.I`. Custom edge labels (e.g., `R` for record fields, `E` for class extension) are passed via `edgeGraphs` and accessed via `edgesByLabel` on nodes.
+```nix
+attributes = {
+  imports = self: id: (self.node id).decls.__edges.I or [];
+  children = self: id: {};
+};
+```
 
-### Scope Queries
+### Algebraic Graph Construction
 
-Structural queries on the node map. These never trigger attribute evaluation — safe to call during HOAG synthesis.
+Four core primitives (Mokhov, 2017):
 
 | Function | Signature | Description |
-|---|---|---|
-| `parent` | `self → id → string?` | Parent node ID |
-| `children` | `self → id → {id → node}` | Child nodes as attrset |
-| `childrenIds` | `self → id → [string]` | Child node IDs |
-| `ancestors` | `self → id → [string]` | All ancestors, nearest first |
-| `siblings` | `self → id → [string]` | Sibling node IDs |
-| `descendants` | `self → id → [string]` | All descendants, breadth-first |
-| `isAncestor` | `self → ancestorId → id → bool` | Is `ancestorId` an ancestor of `id`? |
-| `isDescendant` | `self → descendantId → id → bool` | Is `descendantId` a descendant of `id`? |
-| `nodesByType` | `self → string → {id → node}` | All nodes matching a type tag |
+|----------|-----------|-------------|
+| `empty` | `graph` | Empty graph |
+| `vertex` | `string → graph` | Single vertex |
+| `overlay` | `graph → graph → graph` | Union |
+| `connect` | `graph → graph → graph` | Overlay + cross-product edges |
 
-### Resolution Primitives
+Derived: `overlays`, `vertices`, `edge`, `edges`, `path`, `circuit`, `star`, `clique`, `tree`, `forest`, `gmap`, `induce`, `transpose`, `removeVertex`, `removeEdge`, `hasVertex`, `hasEdge`.
 
-Name resolution following Neron (2015) scope graph semantics and van Antwerpen (2018) generalized queries.
-
-#### `shadow`
-
-```nix
-shadow = inner: outer: { ... }
-```
-
-Merge two declaration sets where inner shadows outer (Neron §5 Def. 1). Keys present in `inner` suppress the same keys from `outer`.
-
-#### `resolve`
-
-```nix
-resolve {
-  local ? null;                 # Declaration from the scope itself (D)
-  imported ? null;              # Declaration from imported scopes (I)
-  inherited ? null;             # Declaration from parent scope (P)
-  localShadowsImport ? true;   # D < I specificity
-  importShadowsParent ? true;  # I < P specificity
-}
-```
-
-Specificity-ordered resolution (Neron Fig. 2). Default ordering: `D < I < P` — local declarations beat imports, imports beat parent scope. Override `localShadowsImport` or `importShadowsParent` for alternative policies like SML-style includes (Neron §2.5).
-
-#### `query`
-
-```nix
-query {
-  dataFilter;                   # node → value | null — extract data from a node
-  labelWF ? "PI";               # "P", "I", or "PI" — which edge types to follow
-  localShadowsImport ? true;    # Specificity policy
-  importShadowsParent ? true;   # Specificity policy
-  transitiveImports ? false;    # Follow imported scopes' own imports (P*.I*)
-} self id
-```
-
-Generalized query combinator (van Antwerpen §2.1). Searches local declarations, imports, and parent chain according to the well-formedness predicate and specificity ordering. Returns the single visible result after shadowing, or `null`.
-
-Tracks seen-imports internally to prevent self-resolution cycles (Neron §2.4, rule X).
-
-#### `queryAll`
-
-```nix
-queryAll { dataFilter; labelWF ? "PI"; transitiveImports ? false; } self id
-```
-
-Returns **all** reachable results as a list without applying shadowing. Useful for ambiguity detection — when the list has more than one element, multiple declarations are reachable.
-
-#### `ambiguous`
-
-```nix
-ambiguous { dataFilter; ... } self id  # → bool
-```
-
-Returns `true` when multiple declarations are reachable via `queryAll`. Built on `queryAll` for detecting shadowing ambiguity (van Antwerpen 2018).
-
-#### `visibleFrom`
-
-Convenience wrapper over `query` — resolves a single visible declaration from a scope.
-
-```nix
-visibleFrom = dataFilter: self: nodeId: ...
-```
-
-Returns the single visible value matching `dataFilter`, or `null`.
-
-### Named Attribute Constructors
-
-Kiama-inspired vocabulary (Sloane et al., 2010) for self-documenting attribute definitions.
+### Attribute Combinators
 
 #### `inherit'`
 
 ```nix
-inherit' {
-  resolve;             # node → value | null — extract data from a node
-  allowParent ? true;  # Encode well-formedness P*.I* (Neron §2.4)
-} self id
+inherit' { resolve; _visited ? {}; } self id
 ```
 
-Inherited attribute: walks the parent chain until `resolve` returns non-null. When `allowParent` is `false`, stops after the current scope (for use after following an import edge — the `P*.I*` well-formedness condition).
+Walks parent chain until `resolve node` returns non-null. Cycle-safe.
 
-#### `paramAttr`
+#### `inheritAll`
 
 ```nix
-paramAttr = f: self: id: param: f self id param;
+inheritAll { extract; combine ? a: b: a ++ b; } self id
 ```
 
-Parameterized attribute (Sloane 2010 §3). The parameter becomes part of the thunk identity; Nix memoizes `(self, id, param)` naturally.
+Accumulates values along entire parent chain.
 
 #### `circular`
 
 ```nix
-circular {
-  init;               # Initial value
-  eq ? a: b: a == b;  # Convergence test
-  maxIter ? 10;       # Iteration bound
-} f self id
+circular { init; eq ? a: b: a == b; maxIter ? 100; } f self id
 ```
 
-Fixed-point iteration from an initial value (Sloane 2010 §2.2). The attribute function `f` receives `self`, `id`, and the previous value, producing the next value. Iterates until `eq prev next` or `maxIter` is reached.
+Fixed-point iteration. `f` receives `self`, `id`, and previous value.
 
 #### `collectionAttr`
 
-Collection attribute combinator (Sloane 2010 §7). Traverses scope neighbors, extracts values, combines results.
+```nix
+collectionAttr { traverse; extract; combine ? a: b: a ++ b; filter ? _: true; } self id
+```
+
+Traverse modes: `"imports"`, `"children"`, `"siblings"`, `"ancestors"`, `"label:<name>"`, or custom function.
+
+#### `query`
 
 ```nix
-collectionAttr = {
-  traverse ? "imports",  # "imports", "children", "siblings", "ancestors", "label:<name>", or custom fn
-  extract,               # self: id: -> [values] or null
-  combine ? a: b: a ++ b,
-  filter ? _: true,
-}: self: id: ...
+query { dataFilter; localShadowsImport ? true; importShadowsParent ? true; transitiveImports ? false; } self id
 ```
 
-#### `inheritAll`
+Neron (2015) resolution: searches local → imports → parent with specificity D < I < P.
 
-Accumulates values along the entire parent chain (unlike `inherit'` which returns the first match).
+#### `queryAll`
 
 ```nix
-inheritAll = {
-  extract,                # node -> value or null
-  combine ? a: b: a ++ b,
-  _visited ? {},
-}: self: id: ...
+queryAll { dataFilter; transitiveImports ? false; } self id
 ```
 
-Cycle-safe via attrset-based visited set. Used for constraint propagation (e.g., `meta.drop` accumulation).
+All reachable results without shadowing. For ambiguity detection.
 
-### Collection
-
-| Function | Signature | Description |
-|---|---|---|
-| `collectImports` | `(self → id → [a]) → self → id → [a]` | Collect from imported scopes only (demand-driven) |
-| `collect` | `{filter?} → (self → id → [a]) → self → [a]` | Collect from all nodes (global; prefer `collectImports`) |
-| `collectByType` | `string → (self → id → [a]) → self → [a]` | Collect from nodes matching a type tag |
-| `collectByLabel` | `string → (self → id → [a]) → self → id → [a]` | Collect from nodes reachable via a custom edge label |
-| `followEdge` | `string → self → id → [string]` | Target node IDs for a custom edge label |
-
-### Structural Subtyping
+#### `paramAttr`
 
 ```nix
-subtypeOf {
-  eq ? _k: _a: _b: true;  # Per-key value comparison (default: key presence only)
-} self idA idB  # → bool
+paramAttr f self id param
 ```
 
-Structural subtyping check (van Antwerpen §2.3): every key in scope A's declarations must exist in scope B's. Pass a custom `eq` function for value-level comparison.
+Parameterized attribute (Sloane 2010 §3).
 
-### HOAG Evaluator
+#### Other
 
-#### `eval`
+- `shadow inner outer` — inner shadows outer (key-based)
+- `resolve { local?, imported?, inherited? }` — specificity-ordered
+- `collectImports extract self id` — collect from imported scopes
+- `collect { filter? } extract self` — global collection (Tier 2)
+- `collectByType type extract self` — filter by node type (Tier 2)
+- `followEdge label self id` — custom edge label targets
+- `collectByLabel label extract self id` — collect via custom edges
+- `subtypeOf { eq? } self idA idB` — structural subtyping
+- `ambiguous args self id` — multiple reachable declarations?
+- `visibleFrom dataFilter self id` — single visible declaration
 
-```nix
-eval {
-  baseNodes;                   # Flat node map from buildNodes
-  synthesize ? (_: {});        # HOAG function: self → { id → node }
-  attributes;                  # { attrName = self: id: value; ... }
-  maxSynthIter ? 10;           # Maximum synthesis convergence iterations
-}
-```
+### Structural Queries
 
-Returns `{ nodes, evaluated }`. Access results via `result.evaluated.${id}.get "attrName"`.
+Thin wrappers over `self.node` and `self.get`:
 
-**`synthesize`** inspects the current graph and returns new nodes. Receives `{ nodes = baseNodes; evaluated; }` — it can read base node structure and demand attribute values, but cannot see its own synthesized output (monotone-add invariant). Synthesized nodes cannot overwrite base nodes. Synthesis iterates to convergence (Vogt 1989) — synthesized nodes can trigger further synthesis. Each iteration can only ADD nodes (monotone). The `maxSynthIter` parameter bounds the number of convergence iterations. Safety constraint: `synthesize` must not read evaluated attributes of nodes it creates in the same iteration.
+| Function | Source | Description |
+|----------|--------|-------------|
+| `parent self id` | `(self.node id).parent` | Parent node ID |
+| `children self id` | `self.get id "children"` | Child nodes attrset |
+| `childrenIds self id` | `attrNames (self.get ...)` | Child node IDs |
+| `ancestors self id` | Parent chain walk | All ancestors |
+| `siblings self id` | Parent's other children | Sibling IDs |
+| `descendants self id` | Recursive children walk | All descendants |
+| `nodesByType self type` | `self.allNodes` filter | Nodes by type (Tier 2) |
 
-**`attributes`** are named functions. Each can read any attribute on any node via `self.evaluated.${nodeId}.get "attrName"`. Evaluation is demand-driven: only attributes that are accessed get computed.
+## Performance
 
-#### `evalDebug`
+| Operation | Cost | Memoized? |
+|-----------|------|-----------|
+| `self.get rootId attrName` | O(1) | Yes — `rootEval.${id}.${attrName}` |
+| `self.get synthId attrName` | O(depth) first, O(1) after | Yes — `node._eval.${attrName}` |
+| `self.node rootId` | O(1) | Yes — direct roots lookup |
+| `self.node synthId` (with parseParent) | O(depth) | Via parent's memoized children |
+| `self.node synthId` (generic fallback) | O(n) | Via memoized children along path |
+| `self.allNodes` | O(n) | Each node computed once |
 
-```nix
-evalDebug { baseNodes; synthesize ? (_: {}); attributes; }
-```
-
-Diagnostic variant with shadow-stack cycle tracing. Same interface as `eval`, but threads a visited-set through `self` so that cycles produce structured error messages:
-
-```
-gen-scope: cycle detected: a.headcount -> b.headcount -> a.headcount
-```
-
-instead of Nix's opaque `infinite recursion encountered`.
-
-**Trade-off:** defeats Nix's native memoization. The same `(id, attrName)` pair may be evaluated multiple times along different call paths. Use `eval` for production; `evalDebug` for diagnosing cycles.
-
-## Advanced Examples
-
-### Import Edges: Cross-Scope Data Flow
-
-```nix
-let
-  importGraph = engine.edge "team:frontend" "team:platform";
-
-  baseNodes = engine.buildNodes {
-    inherit parentGraph importGraph;
-    decls = {
-      "team:platform" = { shared-tools = [ "terraform" "k8s" ]; };
-    };
-  };
-
-  attributes = {
-    available-tools = engine.collectImports
-      (self: importId: self.nodes.${importId}.decls.shared-tools or []);
-  };
-
-  result = engine.eval { inherit baseNodes attributes; };
-in
-  result.evaluated."team:frontend".get "available-tools"
-  # → [ "terraform" "k8s" ]
-```
-
-### HOAG: Dynamic Node Synthesis
-
-Create review scopes for departments exceeding a budget threshold:
-
-```nix
-synthesize = self:
-  let
-    depts = lib.filterAttrs (id: _: lib.hasPrefix "dept:" id) self.nodes;
-  in lib.concatMapAttrs (id: node:
-    if (node.decls.budget or 0) > 300000 then {
-      "review:${id}" = {
-        inherit id; parent = id;
-        decls = { reviewer = "finance"; threshold = 300000; };
-        imports = []; childrenIds = []; type = "review";
-      };
-    } else {}
-  ) depts;
-```
-
-### Custom Edge Labels
-
-Model class inheritance with `E` (extension) edges:
-
-```nix
-baseNodes = engine.buildNodes {
-  parentGraph = engine.vertices [ "classC" "classD" "classE" ];
-  edgeGraphs = {
-    E = engine.overlay
-      (engine.edge "classD" "classC")
-      (engine.edge "classE" "classD");
-  };
-  decls = {
-    classC = { fieldF = 42; };
-    classD = { fieldG = 99; };
-    classE = { fieldH = 77; };
-  };
-};
-
-# Follow E edges to collect inherited fields
-allInherited = self: id:
-  let
-    parents = engine.followEdge "E" self id;
-    direct = lib.concatMap (pid: builtins.attrNames self.nodes.${pid}.decls) parents;
-    transitive = lib.concatMap (allInherited self) parents;
-  in direct ++ transitive;
-```
-
-### Transitive Imports
-
-By default, imports are non-transitive (`P*.I?`). Enable transitive imports for module systems where `import A` also brings in A's own imports:
-
-```nix
-engine.query {
-  dataFilter = node: node.decls.value or null;
-  transitiveImports = true;  # Follow A → B → C chains
-} result "moduleA"
-```
-
-### SML-Style Includes
-
-For `include` semantics where imported declarations have equal precedence with local declarations (no shadowing):
-
-```nix
-engine.query {
-  dataFilter = node: node.decls.x or null;
-  localShadowsImport = false;  # Local doesn't shadow import
-} result "moduleB"
-```
-
-### Scoped Relations
-
-Multiple named relations per scope for separate namespaces:
-
-```nix
-baseNodes = engine.buildNodes {
-  parentGraph = engine.edge "inner" "outer";
-  decls = { outer = { x = "value"; }; };
-  relations = {
-    outer = { typeDecl = { x = "Type_X"; }; };
-  };
-};
-
-# Query value namespace
-engine.query { dataFilter = n: n.decls.x or null; } result "inner"
-# → "value"
-
-# Query type namespace
-engine.query { dataFilter = n: n.rels.typeDecl.x or null; } result "inner"
-# → "Type_X"
-```
+**`parseParent` is mandatory for fleet scale.** Without it, node resolution walks from ALL roots per unknown node. For 500 roots × 1500 synthesized nodes = 750,000 root checks. With `parseParent`: 1500 × O(1) = 1500.
 
 ## Testing
 
 ```bash
-# Run all tests (requires nix-unit)
-nix eval --override-input gen-scope . ./templates/ci#tests
-
-# Run checks
-nix flake check --override-input gen-scope . ./templates/ci
+cd templates/ci
+just ci              # run all tests
+just ci eval         # run eval suite
+just ci eval.test-basic-root-attribute  # specific test
 ```
 
-142 tests across 21 suites covering graph construction, scope resolution, inheritance, imports, HOAG synthesis, cycle detection, custom edge labels, ambiguity detection, and structural subtyping.
+Requires nix-unit. 120+ tests across 10 suites.
 
 ## Theoretical Foundations
 
 | Paper | Used for |
-|---|---|
-| Knuth (1968) "Semantics of context-free languages" | Synthesized + inherited attributes |
-| Vogt, Swierstra, Kuiper (1989) "Higher-order attribute grammars" | Dynamic node synthesis via `synthesize` |
-| Hedin (2000) "Reference attributed grammars" | Cross-node references, fixed-point termination over import edges |
-| Neron, Tolmach, Visser, Wachsmuth (2015) "A theory of name resolution" | Scope graphs, resolution calculus, shadow, well-formedness, seen-imports |
-| van Antwerpen, Bach Poulsen, Rouvoet, Visser (2018) "Scopes as types" | Scoped relations, per-query visibility policies, structural subtyping, custom edge labels |
-| Mokhov (2017) "Algebraic graphs with class" | Graph construction primitives, algebraic laws, transformations |
-| Mokhov, Mitchell, Peyton Jones (2018) "Build systems a la carte" | Demand-driven evaluation strategy, dynamic dependencies |
-| Sloane, Kats, Visser (2010) "A pure OO embedding of attribute grammars" | CachedAttribute pattern, paramAttr, circular attributes |
-| Sloane (2009) "Lightweight language processing in Kiama" | Host language laziness as AG evaluator |
+|-------|----------|
+| Vogt et al. (1989) "Higher-order attribute grammars" | Dynamic node synthesis via `children`/`derived-children` |
+| Hedin (2000) "Reference attributed grammars" | Cross-node references, import edges |
+| Hedin & Magnusson (2003) "JastAdd" | Demand-driven evaluation, aspect-oriented extension |
+| Neron et al. (2015) "A theory of name resolution" | Scope graphs, resolution calculus, shadow, well-formedness |
+| van Antwerpen et al. (2018) "Scopes as types" | Generalized queries, structural subtyping, custom edge labels |
+| Mokhov (2017) "Algebraic graphs with class" | Graph construction primitives |
+| Mokhov et al. (2018) "Build systems à la carte" | Demand-driven evaluation = suspending scheduler |
+| Sloane et al. (2010) "Kiama" | CachedAttribute pattern, paramAttr, circular attributes |
+| Radul & Sussman (2009) "Art of the propagator" | Monotonic cells, partial information |
+| Van Wyk et al. (2010) "Silver" | Forwarding, collection attributes |
 
 ## License
 

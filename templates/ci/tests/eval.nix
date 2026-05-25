@@ -1,93 +1,123 @@
 { lib, engine, ... }:
 let
-  # The department/team example from the spec.
-  parentGraph = engine.overlay (engine.vertices [
-    "dept:eng"
-    "dept:sales"
-  ]) (engine.overlay (engine.star "dept:eng" [
-    "team:platform"
-    "team:frontend"
-  ]) (engine.edge "team:field" "dept:sales"));
-
-  baseNodes = engine.buildNodes {
-    inherit parentGraph;
+  # Minimal graph: two roots, a and b
+  roots = engine.buildNodes {
+    parentGraph = engine.edge "child" "parent";
+    importGraph = engine.empty;
     decls = {
-      "dept:eng" = {
-        budget = 500000;
-        location = "SF";
-      };
-      "dept:sales" = {
-        budget = 200000;
-        location = "NYC";
-      };
-      "team:platform" = {
-        size = 8;
-        focus = "infra";
-      };
-      "team:frontend" = {
-        size = 5;
-        focus = "ui";
-      };
-      "team:field" = {
-        size = 12;
-        focus = "enterprise";
-      };
+      parent = { x = 1; y = 2; };
+      child = { x = 10; };
     };
-  };
-
-  attributes = {
-    location = engine.inherit' { resolve = node: node.decls.location or null; };
-
-    headcount =
-      self: id:
-      let
-        node = self.nodes.${id};
-        local = node.decls.size or 0;
-        childTotal = lib.foldl' (
-          acc: cid: acc + (self.evaluated.${cid}.get "headcount")
-        ) 0 node.childrenIds;
-      in
-      local + childTotal;
+    types = { parent = "host"; child = "user"; };
   };
 
   result = engine.eval {
-    inherit baseNodes attributes;
+    inherit roots;
+    attributes = {
+      children = self: id:
+        let node = self.node id;
+        in lib.filterAttrs (_: n: n.parent == id) roots;
+      imports = self: id: [];
+      greeting = self: id: "hello-${id}";
+      declX = self: id: (self.node id).decls.x or 0;
+    };
+    parseParent = id:
+      let node = roots.${id} or null;
+      in if node != null then node.parent else null;
+  };
+
+  # Single root, no children
+  singleRoots = engine.buildNodes {
+    parentGraph = engine.vertex "solo";
+    importGraph = engine.empty;
+    decls = { solo = { val = 42; }; };
+    types = { solo = "host"; };
+  };
+
+  singleResult = engine.eval {
+    roots = singleRoots;
+    attributes = {
+      children = self: id: {};
+      imports = self: id: [];
+      value = self: id: (self.node id).decls.val or 0;
+    };
   };
 in
 {
-  eval = {
-    test-location-inherited = {
-      expr = result.evaluated."team:platform".get "location";
-      expected = "SF";
+  "eval" = {
+    test-node-returns-root = {
+      expr = (result.node "parent").id;
+      expected = "parent";
     };
 
-    test-location-direct = {
-      expr = result.evaluated."dept:eng".get "location";
-      expected = "SF";
+    test-node-returns-child = {
+      expr = (result.node "child").id;
+      expected = "child";
     };
 
-    test-headcount-leaf = {
-      expr = result.evaluated."team:platform".get "headcount";
-      expected = 8;
+    test-node-type = {
+      expr = (result.node "parent").type;
+      expected = "host";
     };
 
-    test-headcount-rolls-up = {
-      expr = result.evaluated."dept:eng".get "headcount";
-      expected = 13;
+    test-node-decls = {
+      expr = (result.node "parent").decls.x;
+      expected = 1;
     };
 
-    test-headcount-single-child = {
-      expr = result.evaluated."dept:sales".get "headcount";
-      expected = 12;
+    test-get-custom-attr = {
+      expr = result.get "parent" "greeting";
+      expected = "hello-parent";
     };
 
-    test-unknown-attribute-throws = {
-      expr =
-        let
-          threw = builtins.tryEval (result.evaluated."dept:eng".get "nonexistent");
-        in
-        threw.success;
-      expected = false;
+    test-get-custom-attr-child = {
+      expr = result.get "child" "greeting";
+      expected = "hello-child";
+    };
+
+    test-get-declX-parent = {
+      expr = result.get "parent" "declX";
+      expected = 1;
+    };
+
+    test-get-declX-child = {
+      expr = result.get "child" "declX";
+      expected = 10;
+    };
+
+    test-children-of-parent = {
+      expr = builtins.attrNames (result.get "parent" "children");
+      expected = [ "child" ];
+    };
+
+    test-children-of-child = {
+      expr = builtins.attrNames (result.get "child" "children");
+      expected = [];
+    };
+
+    test-allNodes-keys = {
+      expr = builtins.sort builtins.lessThan (builtins.attrNames result.allNodes);
+      expected = [ "child" "parent" ];
+    };
+
+    test-single-root-value = {
+      expr = singleResult.get "solo" "value";
+      expected = 42;
+    };
+
+    test-single-root-allNodes = {
+      expr = builtins.attrNames singleResult.allNodes;
+      expected = ["solo"];
+    };
+
+    test-unknown-attr-throws = {
+      expr = builtins.tryEval (result.get "parent" "nonexistent");
+      expected = { success = false; value = false; };
+    };
+
+    test-unreachable-node-throws = {
+      expr = builtins.tryEval (result.node "ghost");
+      expected = { success = false; value = false; };
     };
   };
 }

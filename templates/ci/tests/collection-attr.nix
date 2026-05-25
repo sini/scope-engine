@@ -1,114 +1,117 @@
-{ engine, ... }:
+{ lib, engine, ... }:
 let
-  nodes = engine.buildNodes {
-    importGraph = engine.edges [
-      {
-        from = "a";
-        to = "b";
-      }
-      {
-        from = "a";
-        to = "c";
-      }
+  inherit (engine) collectionAttr collectImports;
+
+  # Tree: root → {a, b}; a imports b
+  roots = engine.buildNodes {
+    parentGraph = engine.overlays [
+      (engine.edge "a" "root")
+      (engine.edge "b" "root")
     ];
-    parentGraph = engine.edges [
-      {
-        from = "b";
-        to = "root";
-      }
-      {
-        from = "c";
-        to = "root";
-      }
-      {
-        from = "a";
-        to = "root";
-      }
-    ];
+    importGraph = engine.edge "a" "b";
     decls = {
-      b = {
-        tags = [ "web" ];
-      };
-      c = {
-        tags = [
-          "api"
-          "db"
-        ];
-      };
-      root = {
-        tags = [ "infra" ];
-      };
+      root = { tags = [ "root-tag" ]; };
+      a = { tags = [ "a-tag" ]; };
+      b = { tags = [ "b-tag" ]; };
     };
+    types = {};
   };
+
   result = engine.eval {
-    baseNodes = nodes;
+    inherit roots;
     attributes = {
-      importedTags = engine.collectionAttr {
+      children = self: id: lib.filterAttrs (_: n: n.parent == id) roots;
+      imports = self: id: (self.node id).decls.__edges.I or [];
+
+      tags = self: id: (self.node id).decls.tags or [];
+
+      # Collect tags from imports
+      import-tags = collectionAttr {
         traverse = "imports";
-        extract = self: id: self.nodes.${id}.decls.tags or null;
+        extract = self: id: (self.node id).decls.tags or [];
       };
-      childTags = engine.collectionAttr {
+
+      # Collect tags from children
+      child-tags = collectionAttr {
         traverse = "children";
-        extract = self: id: self.nodes.${id}.decls.tags or null;
+        extract = self: id: (self.node id).decls.tags or [];
       };
-      siblingTags = engine.collectionAttr {
+
+      # Collect tags from siblings
+      sibling-tags = collectionAttr {
         traverse = "siblings";
-        extract = self: id: self.nodes.${id}.decls.tags or null;
+        extract = self: id: (self.node id).decls.tags or [];
       };
-      ancestorTags = engine.collectionAttr {
+
+      # Collect from ancestors
+      ancestor-tags = collectionAttr {
         traverse = "ancestors";
-        extract = self: id: self.nodes.${id}.decls.tags or null;
+        extract = self: id: (self.node id).decls.tags or [];
       };
-      filteredTags = engine.collectionAttr {
-        traverse = "imports";
-        extract = self: id: self.nodes.${id}.decls.tags or null;
-        filter = node: node.decls ? tags && builtins.length node.decls.tags > 1;
+
+      # Filtered collection
+      filtered-child-tags = collectionAttr {
+        traverse = "children";
+        extract = self: id: (self.node id).decls.tags or [];
+        filter = node: node.id != "b";
       };
+
+      # collectImports convenience
+      import-tags-simple = collectImports (self: id: (self.node id).decls.tags or []);
     };
+    parseParent = id: (roots.${id} or { parent = null; }).parent;
   };
 in
 {
-  collection-attr.test-collect-from-imports = {
-    expr = builtins.sort builtins.lessThan (result.evaluated.a.get "importedTags");
-    expected = [
-      "api"
-      "db"
-      "web"
-    ];
-  };
+  "collection-attr" = {
+    test-traverse-imports = {
+      expr = result.get "a" "import-tags";
+      expected = [ "b-tag" ];
+    };
 
-  collection-attr.test-collect-from-children = {
-    expr = builtins.sort builtins.lessThan (result.evaluated.root.get "childTags");
-    expected = [
-      "api"
-      "db"
-      "web"
-    ];
-  };
+    test-traverse-children = {
+      expr = builtins.sort builtins.lessThan (result.get "root" "child-tags");
+      expected = [ "a-tag" "b-tag" ];
+    };
 
-  collection-attr.test-collect-from-siblings = {
-    expr = builtins.sort builtins.lessThan (result.evaluated.b.get "siblingTags");
-    expected = [
-      "api"
-      "db"
-    ];
-  };
+    test-traverse-siblings = {
+      expr = result.get "a" "sibling-tags";
+      expected = [ "b-tag" ];
+    };
 
-  collection-attr.test-collect-from-ancestors = {
-    expr = result.evaluated.a.get "ancestorTags";
-    expected = [ "infra" ];
-  };
+    test-traverse-siblings-symmetric = {
+      expr = result.get "b" "sibling-tags";
+      expected = [ "a-tag" ];
+    };
 
-  collection-attr.test-filter-prunes = {
-    expr = builtins.sort builtins.lessThan (result.evaluated.a.get "filteredTags");
-    expected = [
-      "api"
-      "db"
-    ];
-  };
+    test-traverse-ancestors = {
+      expr = result.get "a" "ancestor-tags";
+      expected = [ "root-tag" ];
+    };
 
-  collection-attr.test-empty-imports = {
-    expr = result.evaluated.c.get "importedTags";
-    expected = [ ];
+    test-traverse-ancestors-root-empty = {
+      expr = result.get "root" "ancestor-tags";
+      expected = [];
+    };
+
+    test-filtered-collection = {
+      expr = result.get "root" "filtered-child-tags";
+      expected = [ "a-tag" ];
+    };
+
+    test-collectImports-convenience = {
+      expr = result.get "a" "import-tags-simple";
+      expected = [ "b-tag" ];
+    };
+
+    test-no-imports-empty = {
+      expr = result.get "b" "import-tags";
+      expected = [];
+    };
+
+    test-traverse-children-leaf = {
+      expr = result.get "a" "child-tags";
+      expected = [];
+    };
   };
 }

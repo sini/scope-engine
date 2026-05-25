@@ -1,93 +1,137 @@
 { lib, engine, ... }:
 let
-  parentGraph = engine.vertices [
-    "dept:eng"
-    "dept:sales"
-  ];
-
-  baseNodes = engine.buildNodes {
-    inherit parentGraph;
+  # Multi-level: env → host → user
+  roots = engine.buildNodes {
+    parentGraph = engine.overlays [
+      (engine.edge "host1" "env")
+      (engine.edge "user1" "host1")
+      (engine.edge "user2" "host1")
+    ];
+    importGraph = engine.empty;
     decls = {
-      "dept:eng" = {
-        budget = 500000;
-      };
-      "dept:sales" = {
-        budget = 200000;
-      };
+      env = { name = "production"; };
+      host1 = { hostname = "srv1"; };
+      user1 = { username = "alice"; };
+      user2 = { username = "bob"; };
+    };
+    types = {
+      env = "env";
+      host1 = "host";
+      user1 = "user";
+      user2 = "user";
     };
   };
 
-  # Synthesize review nodes for departments exceeding budget threshold.
-  synthesize =
-    self:
-    let
-      depts = lib.filterAttrs (id: _: lib.hasPrefix "dept:" id) self.nodes;
-    in
-    lib.concatMapAttrs (
-      id: node:
-      if (node.decls.budget or 0) > 300000 then
-        {
-          "review:${id}" = {
-            inherit id;
-            parent = id;
-            decls = {
-              reviewer = "finance";
-              threshold = 300000;
-            };
-            imports = [ ];
-            childrenIds = [ ];
-            type = "review";
-          };
-        }
-      else
-        { }
-    ) depts;
-
   result = engine.eval {
-    inherit baseNodes synthesize;
-    attributes = { };
+    inherit roots;
+    attributes = {
+      children = self: id:
+        lib.filterAttrs (_: n: n.parent == id) roots;
+      imports = self: id: [];
+      label = self: id:
+        let node = self.node id;
+        in node.decls.hostname or node.decls.username or node.decls.name or id;
+    };
+    parseParent = id: (roots.${id} or { parent = null; }).parent;
+  };
+
+  # Derived children: proxy nodes synthesized conditionally
+  proxyRoots = engine.buildNodes {
+    parentGraph = engine.edge "svc" "cluster";
+    importGraph = engine.empty;
+    decls = {
+      cluster = { proxy = true; };
+      svc = { port = 8080; };
+    };
+    types = { cluster = "cluster"; svc = "service"; };
+  };
+
+  proxyResult = engine.eval {
+    roots = proxyRoots;
+    attributes = {
+      children = self: id:
+        lib.filterAttrs (_: n: n.parent == id) proxyRoots;
+      imports = self: id: [];
+      derived-children = self: id:
+        let node = self.node id;
+        in if node.decls.proxy or false then {
+          "${id}-proxy" = {
+            id = "${id}-proxy";
+            type = "proxy";
+            parent = id;
+            decls = { upstream = id; };
+          };
+        } else {};
+      port = self: id: (self.node id).decls.port or null;
+    };
+    parseParent = id:
+      if proxyRoots ? ${id} then proxyRoots.${id}.parent
+      else
+        # Derived children: parse parent from id suffix
+        let parts = lib.splitString "-proxy" id;
+        in if builtins.length parts > 1 then builtins.head parts else null;
   };
 in
 {
-  hoag = {
-    test-synthesized-node-exists = {
-      expr = result.nodes ? "review:dept:eng";
-      expected = true;
+  "hoag" = {
+    test-multi-level-env-label = {
+      expr = result.get "env" "label";
+      expected = "production";
     };
 
-    test-synthesized-node-not-for-low-budget = {
-      expr = result.nodes ? "review:dept:sales";
-      expected = false;
+    test-multi-level-host-label = {
+      expr = result.get "host1" "label";
+      expected = "srv1";
     };
 
-    test-synthesized-node-data = {
-      expr = result.nodes."review:dept:eng".decls.reviewer;
-      expected = "finance";
+    test-multi-level-user-label = {
+      expr = result.get "user1" "label";
+      expected = "alice";
     };
 
-    test-base-nodes-not-overwritten = {
-      expr =
-        let
-          badSynthesize = _: {
-            "dept:eng" = {
-              id = "dept:eng";
-              parent = null;
-              decls = {
-                budget = 0;
-              };
-              imports = [ ];
-              childrenIds = [ ];
-              type = null;
-            };
-          };
-          r = engine.eval {
-            inherit baseNodes;
-            synthesize = badSynthesize;
-            attributes = { };
-          };
-        in
-        r.nodes."dept:eng".decls.budget;
-      expected = 500000;
+    test-multi-level-children-env = {
+      expr = builtins.attrNames (result.get "env" "children");
+      expected = [ "host1" ];
+    };
+
+    test-multi-level-children-host = {
+      expr = builtins.sort builtins.lessThan (builtins.attrNames (result.get "host1" "children"));
+      expected = [ "user1" "user2" ];
+    };
+
+    test-multi-level-parent-chain = {
+      expr = (result.node "user1").parent;
+      expected = "host1";
+    };
+
+    test-multi-level-grandparent = {
+      expr = (result.node "host1").parent;
+      expected = "env";
+    };
+
+    test-derived-children-proxy-exists = {
+      expr = builtins.attrNames (proxyResult.get "cluster" "derived-children");
+      expected = [ "cluster-proxy" ];
+    };
+
+    test-derived-children-non-proxy = {
+      expr = proxyResult.get "svc" "derived-children";
+      expected = {};
+    };
+
+    test-derived-child-reachable = {
+      expr = (proxyResult.node "cluster-proxy").type;
+      expected = "proxy";
+    };
+
+    test-derived-child-decls = {
+      expr = (proxyResult.node "cluster-proxy").decls.upstream;
+      expected = "cluster";
+    };
+
+    test-allNodes-includes-derived = {
+      expr = builtins.sort builtins.lessThan (builtins.attrNames proxyResult.allNodes);
+      expected = [ "cluster" "cluster-proxy" "svc" ];
     };
   };
 }

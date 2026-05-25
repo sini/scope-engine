@@ -1,132 +1,166 @@
-# HOAG evaluator.
+# HOAG evaluator: demand-driven with co-located _eval memoization.
 #
-# Demand-driven evaluation via lib.fix. Nix's native lazy evaluation provides
-# the scheduling, memoization, and cycle detection (Mokhov et al., 2018).
-# builtins.addErrorContext on every get call provides breadcrumbs for cycle errors.
+# Nix's native lazy evaluation provides scheduling, memoization, and cycle
+# detection (Mokhov et al., 2018). Every attribute evaluates exactly once per
+# node — including on dynamically synthesized nodes (Vogt et al., 1989).
+#
+# The key insight: Nix attrset VALUES are lazy but KEYS are eager. The only way
+# to get O(1) attribute access is an attrset entry. We co-locate the memoization
+# cache (_eval) ON each node when it is materialized by its parent's `children`
+# or `derived-children` attribute.
 { lib }:
 let
-  # Synthesis convergence loop (Vogt 1989).
-  # Iterates until no new nodes are produced.
-  runSynthesis =
-    {
-      baseNodes,
-      synthesize,
-      maxSynthIter,
-      evaluated,
-    }:
-    let
-      go =
-        n: prevSynth:
-        if n >= maxSynthIter then
-          throw "gen-scope: synthesis exceeded ${toString maxSynthIter} iterations (Vogt well-definedness)"
-        else
-          let
-            allNodes = baseNodes // prevSynth;
-            input = {
-              nodes = allNodes;
-              inherit evaluated;
-            };
-            newSynth = builtins.removeAttrs (synthesize input) (builtins.attrNames allNodes);
-          in
-          if newSynth == { } then prevSynth else go (n + 1) (prevSynth // newSynth);
-    in
-    go 0 { };
-
   eval =
     {
-      baseNodes,
-      synthesize ? (_: { }),
+      roots,
       attributes,
-      maxSynthIter ? 10,
+      parseParent ? null,
     }:
-    lib.fix (
-      self:
-      let
-        synthesized = runSynthesis {
-          inherit baseNodes synthesize maxSynthIter;
-          inherit (self) evaluated;
+    lib.fix (self: let
+      # Wrap a child node with a lazy attribute cache (_eval).
+      # The cache propagates recursively: _eval.children wraps grandchildren.
+      wrapChild = childNode:
+        childNode // {
+          _eval = builtins.mapAttrs (attrName: fn:
+            if attrName == "children" || attrName == "derived-children"
+            then let raw = fn self childNode.id;
+              in builtins.mapAttrs (_: wrapChild) raw
+            else fn self childNode.id
+          ) attributes;
         };
-      in
-      {
-        # Synthesized nodes add to the graph; cannot overwrite base nodes.
-        # Enforces the HOAG monotone-add invariant (Vogt et al., 1989).
-        nodes = baseNodes // synthesized;
-        evaluated = lib.mapAttrs (
-          id: _node: {
-            get =
-              attrName:
-              if attributes ? ${attrName} then
-                builtins.addErrorContext "evaluating attribute '${attrName}' on scope '${id}'" (
-                  attributes.${attrName} self id
-                )
-              else
-                throw "gen-scope: unknown attribute '${attrName}' on node '${id}'";
-          }
-        ) self.nodes;
-      }
-    );
 
-  # Diagnostic variant with shadow-stack cycle tracing (van Antwerpen 2018).
+      # Root memoization: each root gets a lazy attrset of its attribute computations.
+      rootEval = lib.mapAttrs (id: _:
+        builtins.mapAttrs (attrName: fn:
+          if attrName == "children" || attrName == "derived-children"
+          then let raw = fn self id;
+            in builtins.mapAttrs (_: wrapChild) raw
+          else fn self id
+        ) attributes
+      ) roots;
+
+      # Resolve a node by ID.
+      # Roots: direct lookup. Non-roots: via parseParent or generic walk.
+      resolveNode = id:
+        if roots ? ${id} then roots.${id}
+        else if parseParent != null then
+          let
+            parentId = parseParent id;
+          in
+          if parentId == null then genericResolve id
+          else
+            let
+              children = self.get parentId "children";
+              derived =
+                if attributes ? "derived-children"
+                then self.get parentId "derived-children"
+                else {};
+              all = children // derived;
+            in
+            if all ? ${id} then all.${id}
+            else throw "gen-scope: node '${id}' not reachable (parent: ${parentId})"
+        else genericResolve id;
+
+      # Fallback resolution: walk from all roots through children.
+      # O(n) worst case — use parseParent for production scale.
+      genericResolve = id:
+        let
+          walkChildren = parentId:
+            let
+              children = self.get parentId "children";
+              derived =
+                if attributes ? "derived-children"
+                then self.get parentId "derived-children"
+                else {};
+              all = children // derived;
+            in
+            if all ? ${id} then all.${id}
+            else
+              lib.foldl' (acc: childId:
+                if acc != null then acc else walkChildren childId
+              ) null (builtins.attrNames all);
+          found = lib.foldl' (acc: rootId:
+            if acc != null then acc else walkChildren rootId
+          ) null (builtins.attrNames roots);
+        in
+        if found != null then found
+        else throw "gen-scope: node '${id}' not reachable from roots";
+    in {
+      node = resolveNode;
+
+      get = id: attrName:
+        builtins.addErrorContext "evaluating '${attrName}' on '${id}'" (
+          if !(attributes ? ${attrName}) then
+            throw "gen-scope: unknown attribute '${attrName}' on node '${id}'"
+          else if rootEval ? ${id} then rootEval.${id}.${attrName}
+          else let n = self.node id;
+          in if n ? _eval then n._eval.${attrName}
+          else attributes.${attrName} self id  # fallback (shouldn't happen)
+        );
+
+      # Tier 2: materialized flat map (forces full tree, all memoized).
+      # O(n) — each node computed once. Use for gen-graph queries, diagrams, fleet ops.
+      allNodes = let
+        walkFrom = id:
+          let
+            children =
+              if attributes ? "children" then self.get id "children"
+              else {};
+            derived =
+              if attributes ? "derived-children" then self.get id "derived-children"
+              else {};
+            all = children // derived;
+          in [{ name = id; value = self.node id; }]
+             ++ lib.concatMap walkFrom (builtins.attrNames all);
+      in lib.listToAttrs (lib.concatMap walkFrom (builtins.attrNames roots));
+    });
+
+  # Diagnostic variant with shadow-stack cycle tracing.
   #
-  # Threads a _visited list through self so that cycles produce structured
-  # traces like "gen-scope: cycle: a.x -> b.x -> a.x" instead of Nix's
-  # opaque "infinite recursion encountered."
-  #
-  # Attribute functions keep the same signature (self: id:). The visited
-  # stack lives on self._visited and is updated transparently by get.
+  # Uses attrset-based visited (O(1) cycle check) + parallel list for ordered
+  # trace output. Cycles produce: "gen-scope: cycle: a.x -> b.x -> a.x"
   #
   # Trade-off: defeats Nix's native memoization — every get call creates a
-  # new self with a longer _visited list, so the same (id, attrName) pair
-  # may be evaluated multiple times along different call paths. List-based
-  # _visited is intentional here: ordered traces need sequence, and perf
-  # is already sacrificed for diagnostics. Use eval for production.
+  # new self with updated visited/traceList. Use eval for production.
   evalDebug =
     {
-      baseNodes,
-      synthesize ? (_: { }),
+      roots,
       attributes,
-      maxSynthIter ? 10,
+      parseParent ? null,
     }:
     let
-      synthesized = runSynthesis {
-        inherit baseNodes synthesize maxSynthIter;
-        evaluated = result.evaluated;
-      };
-      nodes = baseNodes // synthesized;
+      mkSelf = visited: traceList: {
+        node = id:
+          if roots ? ${id} then roots.${id}
+          else if parseParent != null then
+            let
+              parentId = parseParent id;
+              s = mkSelf visited traceList;
+              children = if parentId != null then s.get parentId "children" else {};
+              derived =
+                if parentId != null && attributes ? "derived-children"
+                then s.get parentId "derived-children"
+                else {};
+            in (children // derived).${id}
+              or (throw "gen-scope: node '${id}' not reachable")
+          else throw "gen-scope: evalDebug requires parseParent for non-root nodes";
 
-      mkEvaluated =
-        visited:
-        lib.mapAttrs (
-          id: _node: {
-            get =
-              attrName:
-              let
-                traceEntry = "${id}.${attrName}";
-              in
-              if !(attributes ? ${attrName}) then
-                throw "gen-scope: unknown attribute '${attrName}' on node '${id}'"
-              else if builtins.elem traceEntry visited then
-                throw "gen-scope: cycle detected: ${builtins.concatStringsSep " -> " (visited ++ [ traceEntry ])}"
-              else
-                let
-                  # Create a new self with the updated visited stack.
-                  selfWithTrace = {
-                    inherit nodes;
-                    _visited = visited ++ [ traceEntry ];
-                    evaluated = mkEvaluated (visited ++ [ traceEntry ]);
-                  };
-                in
-                attributes.${attrName} selfWithTrace id;
-          }
-        ) nodes;
+        get = id: attrName:
+          let
+            traceEntry = "${id}.${attrName}";
+          in
+          if !(attributes ? ${attrName}) then
+            throw "gen-scope: unknown attribute '${attrName}' on node '${id}'"
+          else if visited ? ${traceEntry} then
+            throw "gen-scope: cycle detected: ${builtins.concatStringsSep " -> " (traceList ++ [ traceEntry ])}"
+          else
+            attributes.${attrName}
+              (mkSelf (visited // { ${traceEntry} = true; }) (traceList ++ [ traceEntry ]))
+              id;
 
-      result = {
-        inherit nodes;
-        _visited = [ ];
-        evaluated = mkEvaluated [ ];
+        allNodes = throw "gen-scope: evalDebug does not support allNodes (use eval for materialization)";
       };
-    in
-    result;
+    in mkSelf {} [];
 in
 {
   inherit eval evalDebug;

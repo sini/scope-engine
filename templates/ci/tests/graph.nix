@@ -1,186 +1,132 @@
 { lib, engine, ... }:
 {
-  graph = {
+  "graph" = {
     test-empty = {
       expr = engine.empty;
-      expected = {
-        vertices = [ ];
-        edges = [ ];
-      };
+      expected = { vertices = []; edges = []; };
     };
 
     test-vertex = {
       expr = engine.vertex "a";
-      expected = {
-        vertices = [ "a" ];
-        edges = [ ];
-      };
+      expected = { vertices = [ "a" ]; edges = []; };
     };
 
     test-edge = {
       expr = engine.edge "a" "b";
       expected = {
-        vertices = [
-          "a"
-          "b"
-        ];
-        edges = [
-          {
-            from = "a";
-            to = "b";
-          }
-        ];
+        vertices = [ "a" "b" ];
+        edges = [ { from = "a"; to = "b"; } ];
       };
     };
 
-    test-overlay-commutative = {
-      expr =
-        let
-          g1 = engine.vertex "a";
-          g2 = engine.vertex "b";
-          ab = engine.overlay g1 g2;
-          ba = engine.overlay g2 g1;
-        in
-        {
-          ab-vertices = builtins.sort builtins.lessThan ab.vertices;
-          ba-vertices = builtins.sort builtins.lessThan ba.vertices;
-        };
-      expected = {
-        ab-vertices = [
-          "a"
-          "b"
-        ];
-        ba-vertices = [
-          "a"
-          "b"
-        ];
-      };
+    test-overlay-vertices = {
+      expr = (engine.overlay (engine.vertex "a") (engine.vertex "b")).vertices;
+      expected = [ "a" "b" ];
     };
 
-    test-star = {
-      expr =
-        let
-          g = engine.star "root" [
-            "c1"
-            "c2"
-          ];
-        in
-        {
-          vertices = builtins.sort builtins.lessThan g.vertices;
-          edge-count = builtins.length g.edges;
-          edges = builtins.sort (a: b: a.from < b.from) g.edges;
-        };
-      expected = {
-        vertices = [
-          "c1"
-          "c2"
-          "root"
-        ];
-        edge-count = 2;
-        edges = [
-          {
-            from = "c1";
-            to = "root";
-          }
-          {
-            from = "c2";
-            to = "root";
-          }
-        ];
-      };
-    };
-
-    test-vertices = {
-      expr =
-        let
-          g = engine.vertices [
-            "a"
-            "b"
-            "c"
-          ];
-        in
-        builtins.sort builtins.lessThan g.vertices;
-      expected = [
-        "a"
-        "b"
-        "c"
-      ];
+    test-overlay-edges = {
+      expr = (engine.overlay (engine.edge "a" "b") (engine.edge "c" "d")).edges;
+      expected = [ { from = "a"; to = "b"; } { from = "c"; to = "d"; } ];
     };
 
     test-connect-cross-product = {
-      expr =
-        let
-          g = engine.connect (engine.vertices [
-            "a"
-            "b"
-          ]) (engine.vertices [
-            "x"
-            "y"
-          ]);
-        in
-        builtins.length g.edges;
+      expr = (engine.connect (engine.vertex "a") (engine.vertex "b")).edges;
+      expected = [ { from = "a"; to = "b"; } ];
+    };
+
+    test-connect-multi = {
+      expr = builtins.length (engine.connect (engine.vertices [ "a" "b" ]) (engine.vertices [ "c" "d" ])).edges;
       expected = 4;
     };
 
-    test-clique = {
-      expr =
-        let
-          g = engine.clique [
-            "a"
-            "b"
-            "c"
-          ];
-        in
-        builtins.length g.edges;
-      # a->b, a->c, b->c = 3 edges from foldl' connect
-      expected = 3;
+    test-vertices = {
+      expr = (engine.vertices [ "x" "y" "z" ]).vertices;
+      expected = [ "x" "y" "z" ];
+    };
+
+    test-path = {
+      expr = (engine.path [ "a" "b" "c" ]).edges;
+      expected = [ { from = "a"; to = "b"; } { from = "b"; to = "c"; } ];
+    };
+
+    test-path-single = {
+      expr = engine.path [ "a" ];
+      expected = { vertices = [ "a" ]; edges = []; };
+    };
+
+    test-path-empty = {
+      expr = engine.path [];
+      expected = { vertices = []; edges = []; };
+    };
+
+    test-circuit = {
+      expr = (engine.circuit [ "a" "b" "c" ]).edges;
+      expected = [
+        { from = "a"; to = "b"; }
+        { from = "b"; to = "c"; }
+        { from = "c"; to = "a"; }
+      ];
+    };
+
+    test-star = {
+      expr = builtins.sort (a: b: a.from < b.from) (engine.star "center" [ "l1" "l2" ]).edges;
+      expected = [
+        { from = "l1"; to = "center"; }
+        { from = "l2"; to = "center"; }
+      ];
     };
 
     test-gmap = {
-      expr =
-        let
-          g = engine.gmap (x: "prefix-${x}") (engine.edge "a" "b");
-        in
-        {
-          inherit (g) vertices edges;
-        };
+      expr = engine.gmap (x: "${x}-mapped") (engine.edge "a" "b");
       expected = {
-        vertices = [
-          "prefix-a"
-          "prefix-b"
-        ];
-        edges = [
-          {
-            from = "prefix-a";
-            to = "prefix-b";
-          }
-        ];
+        vertices = [ "a-mapped" "b-mapped" ];
+        edges = [ { from = "a-mapped"; to = "b-mapped"; } ];
       };
     };
 
     test-induce = {
-      expr =
-        let
-          g = engine.overlay (engine.edge "a" "b") (engine.edge "b" "c");
-          filtered = engine.induce (v: v != "c") g;
-        in
-        {
-          # Algebraic idempotence: dedup deferred to buildNodes.
-          vertices = lib.unique (builtins.sort builtins.lessThan filtered.vertices);
-          edges = filtered.edges;
-        };
-      expected = {
-        vertices = [
-          "a"
-          "b"
-        ];
-        edges = [
-          {
-            from = "a";
-            to = "b";
-          }
-        ];
-      };
+      expr = engine.induce (x: x != "b") (engine.path [ "a" "b" "c" ]);
+      expected = { vertices = [ "a" "c" ]; edges = []; };
+    };
+
+    test-transpose = {
+      expr = (engine.transpose (engine.edge "a" "b")).edges;
+      expected = [ { from = "b"; to = "a"; } ];
+    };
+
+    test-overlays = {
+      expr = (engine.overlays [ (engine.vertex "a") (engine.vertex "b") (engine.vertex "c") ]).vertices;
+      expected = [ "a" "b" "c" ];
+    };
+
+    test-hasVertex-true = {
+      expr = engine.hasVertex "a" (engine.edge "a" "b");
+      expected = true;
+    };
+
+    test-hasVertex-false = {
+      expr = engine.hasVertex "c" (engine.edge "a" "b");
+      expected = false;
+    };
+
+    test-hasEdge-true = {
+      expr = engine.hasEdge "a" "b" (engine.edge "a" "b");
+      expected = true;
+    };
+
+    test-hasEdge-false = {
+      expr = engine.hasEdge "b" "a" (engine.edge "a" "b");
+      expected = false;
+    };
+
+    test-removeVertex = {
+      expr = engine.removeVertex "b" (engine.path [ "a" "b" "c" ]);
+      expected = { vertices = [ "a" "c" ]; edges = []; };
+    };
+
+    test-removeEdge = {
+      expr = (engine.removeEdge "a" "b" (engine.path [ "a" "b" "c" ])).edges;
+      expected = [ { from = "b"; to = "c"; } ];
     };
   };
 }
