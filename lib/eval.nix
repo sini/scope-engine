@@ -10,17 +10,30 @@ let
       baseNodes,
       synthesize ? (_: { }),
       attributes,
+      maxSynthIter ? 10,
     }:
     lib.fix (
       self:
       let
-        # Synthesize sees baseNodes for structural inspection + evaluated for
-        # attribute access. Cannot see its own output (monotone-add, not fixpoint).
-        synthInput = {
-          inherit (self) evaluated;
-          nodes = baseNodes;
-        };
-        synthesized = builtins.removeAttrs (synthesize synthInput) (builtins.attrNames baseNodes);
+        # Synthesize sees all current nodes + evaluated for attribute access.
+        # Convergence loop: iterate until no new nodes are produced (Vogt 1989).
+        # synthesize MUST NOT read evaluated attributes of nodes it creates in
+        # the same or later iteration — only base/previously-converged nodes.
+        synthesized =
+          let
+            go = n: prevSynth:
+              if n >= maxSynthIter then
+                throw "gen-scope: synthesis exceeded ${toString maxSynthIter} iterations (Vogt well-definedness)"
+              else
+                let
+                  allNodes = baseNodes // prevSynth;
+                  input = { nodes = allNodes; inherit (self) evaluated; };
+                  newSynth = builtins.removeAttrs (synthesize input) (builtins.attrNames allNodes);
+                in
+                if newSynth == {} then prevSynth
+                else go (n + 1) (prevSynth // newSynth);
+          in
+          go 0 {};
       in
       {
         # Synthesized nodes add to the graph; cannot overwrite base nodes.
@@ -61,11 +74,22 @@ let
       attributes,
     }:
     let
-      synthInput = {
-        nodes = baseNodes;
-        evaluated = result.evaluated;
-      };
-      synthesized = builtins.removeAttrs (synthesize synthInput) (builtins.attrNames baseNodes);
+      maxSynthIter = 10;
+      synthesized =
+        let
+          go = n: prevSynth:
+            if n >= maxSynthIter then
+              throw "gen-scope: synthesis exceeded ${toString maxSynthIter} iterations (Vogt well-definedness)"
+            else
+              let
+                allNodes = baseNodes // prevSynth;
+                input = { nodes = allNodes; evaluated = result.evaluated; };
+                newSynth = builtins.removeAttrs (synthesize input) (builtins.attrNames allNodes);
+              in
+              if newSynth == {} then prevSynth
+              else go (n + 1) (prevSynth // newSynth);
+        in
+        go 0 {};
       nodes = baseNodes // synthesized;
 
       mkEvaluated =
