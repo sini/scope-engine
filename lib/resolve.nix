@@ -173,6 +173,51 @@ let
   visibleFrom = dataFilter: self: nodeId:
     query { inherit dataFilter; } self nodeId;
 
+  # Collection attribute combinator (Sloane 2010, §7 — Kiama collection attributes).
+  # Traverses scope neighbors matching a predicate, extracts values, combines results.
+  collectionAttr =
+    {
+      traverse ? "imports",
+      extract,
+      combine ? a: b: a ++ b,
+      filter ? _: true,
+    }:
+    self: id:
+    let
+      targets =
+        if builtins.isFunction traverse then
+          traverse self id
+        else if traverse == "imports" then
+          self.nodes.${id}.imports
+        else if traverse == "children" then
+          self.nodes.${id}.childrenIds
+        else if traverse == "siblings" then
+          let
+            p = self.nodes.${id}.parent;
+          in
+          if p == null then [ ] else builtins.filter (cid: cid != id) self.nodes.${p}.childrenIds
+        else if traverse == "ancestors" then
+          let
+            go =
+              nid:
+              if nid == null then [ ] else [ nid ] ++ go self.nodes.${nid}.parent;
+          in
+          go self.nodes.${id}.parent
+        else if lib.hasPrefix "label:" traverse then
+          self.nodes.${id}.edgesByLabel.${lib.removePrefix "label:" traverse} or [ ]
+        else
+          throw "gen-scope: collectionAttr: unknown traverse mode '${traverse}'";
+      filtered = builtins.filter (tid: filter self.nodes.${tid}) targets;
+      perTarget = map (
+        tid:
+        let
+          r = extract self tid;
+        in
+        if r == null then [ ] else if builtins.isList r then r else [ r ]
+      ) filtered;
+    in
+    builtins.foldl' combine [ ] perTarget;
+
   # Global collection (WARNING: iterates all nodes — prefer collectImports).
   collect =
     {
@@ -268,6 +313,7 @@ in
     queryAll
     ambiguous
     visibleFrom
+    collectionAttr
     inherit'
     paramAttr
     circular
