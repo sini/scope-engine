@@ -1,13 +1,13 @@
 {
   description = "Feature flag evaluator: hierarchical flag resolution with rollout rules";
   inputs = {
-    scope-engine.url = "github:sini/scope-engine";
+    gen-scope.url = "github:sini/gen-scope";
     nixpkgs.url = "https://channels.nixos.org/nixos-unstable/nixexprs.tar.xz";
   };
-  outputs = { scope-engine, nixpkgs, ... }:
+  outputs = { gen-scope, nixpkgs, ... }:
     let
       lib = nixpkgs.lib;
-      engine = scope-engine { inherit lib; };
+      engine = gen-scope { inherit lib; };
       graph = import ./graph.nix { inherit engine lib; };
       attributes = import ./attributes.nix { inherit engine lib; };
       inherit (graph) baseNodes synthesize;

@@ -1,7 +1,7 @@
 {
-  description = "Infrastructure schema demo — SQL query engine on gen-schema + gen-graph + scope-engine";
+  description = "Infrastructure schema demo — SQL query engine on gen-schema + gen-graph + gen-scope";
   inputs = {
-    scope-engine.url = "github:sini/scope-engine";
+    gen-scope.url = "github:sini/gen-scope";
     gen-schema.url = "github:sini/gen-schema";
     gen-graph.url = "github:sini/gen-graph";
     gen.url = "github:sini/gen";
@@ -9,7 +9,7 @@
   };
   outputs =
     {
-      scope-engine,
+      gen-scope,
       gen-schema,
       gen-graph,
       gen,
@@ -18,7 +18,7 @@
     }:
     let
       lib = nixpkgs.lib;
-      engine = scope-engine { inherit lib; };
+      engine = gen-scope { inherit lib; };
       genLib = gen { inherit lib; };
       schemaLib = import "${gen-schema}/nix/lib" {
         inherit lib;
@@ -26,10 +26,7 @@
           gen = genLib;
         };
       };
-      graphLib = gen-graph {
-        inherit lib;
-        engine = engine;
-      };
+      graphLib = gen-graph { inherit lib; };
       sql = import ./lib {
         inherit
           lib

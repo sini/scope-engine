@@ -1,7 +1,7 @@
 {
-  description = "Nest traits model on gen-schema + gen-aspects + scope-engine";
+  description = "Nest traits model on gen-schema + gen-aspects + gen-scope";
   inputs = {
-    scope-engine.url = "github:sini/scope-engine";
+    gen-scope.url = "github:sini/gen-scope";
     gen-schema.url = "github:sini/gen-schema";
     gen-aspects.url = "github:sini/gen-aspects";
     gen.url = "github:sini/gen";
@@ -10,7 +10,7 @@
   };
   outputs =
     {
-      scope-engine,
+      gen-scope,
       gen-schema,
       gen-aspects,
       gen,
@@ -20,7 +20,7 @@
     }:
     let
       lib = nixpkgs.lib;
-      engine = scope-engine { inherit lib; };
+      engine = gen-scope { inherit lib; };
       genLib = gen { inherit lib; };
       schemaLib = import "${gen-schema}/nix/lib" {
         inherit lib;
@@ -29,10 +29,7 @@
         };
       };
       aspects = gen-aspects { inherit lib; };
-      graphLib = gen-graph {
-        inherit lib;
-        engine = engine;
-      };
+      graphLib = gen-graph { inherit lib; };
       nest = import ./lib {
         inherit
           lib

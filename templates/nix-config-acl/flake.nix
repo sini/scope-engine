@@ -1,13 +1,13 @@
 {
   description = "nix-config ACL: unified access control with three-level scope graph resolution";
   inputs = {
-    scope-engine.url = "github:sini/scope-engine";
+    gen-scope.url = "github:sini/gen-scope";
     nixpkgs.url = "https://channels.nixos.org/nixos-unstable/nixexprs.tar.xz";
   };
-  outputs = { scope-engine, nixpkgs, ... }:
+  outputs = { gen-scope, nixpkgs, ... }:
     let
       lib = nixpkgs.lib;
-      engine = scope-engine { inherit lib; };
+      engine = gen-scope { inherit lib; };
       groups = import ./data/groups.nix;
       environments = import ./data/environments.nix;
       hosts = import ./data/hosts.nix;

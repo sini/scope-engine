@@ -1,16 +1,16 @@
 {
-  description = "scope-engine demo: algebraic graphs, scope resolution, HOAG evaluation";
+  description = "gen-scope demo: algebraic graphs, scope resolution, HOAG evaluation";
 
   inputs = {
-    scope-engine.url = "github:sini/scope-engine";
+    gen-scope.url = "github:sini/gen-scope";
     nixpkgs.url = "https://channels.nixos.org/nixos-unstable/nixexprs.tar.xz";
   };
 
   outputs =
-    { scope-engine, nixpkgs, ... }:
+    { gen-scope, nixpkgs, ... }:
     let
       lib = nixpkgs.lib;
-      engine = scope-engine { inherit lib; };
+      engine = gen-scope { inherit lib; };
     in
     {
 
@@ -736,7 +736,7 @@
           # The cycle is caught with a structured error, not infinite recursion
           cycle-caught = !tried.success; # → true
           # Error message would be:
-          # "scope-engine: cycle detected: a.ping -> b.ping -> a.ping"
+          # "gen-scope: cycle detected: a.ping -> b.ping -> a.ping"
         };
 
       # ═══════════════════════════════════════════════════════════════════

@@ -1,13 +1,13 @@
 {
   description = "Dependency resolver: package resolution with version constraints and conflict detection";
   inputs = {
-    scope-engine.url = "github:sini/scope-engine";
+    gen-scope.url = "github:sini/gen-scope";
     nixpkgs.url = "https://channels.nixos.org/nixos-unstable/nixexprs.tar.xz";
   };
-  outputs = { scope-engine, nixpkgs, ... }:
+  outputs = { gen-scope, nixpkgs, ... }:
     let
       lib = nixpkgs.lib;
-      engine = scope-engine { inherit lib; };
+      engine = gen-scope { inherit lib; };
       graph = import ./graph.nix { inherit engine; };
       attributes = import ./attributes.nix { inherit engine lib; };
       inherit (graph) baseNodes synthesize;
