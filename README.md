@@ -1,26 +1,45 @@
-# scope-engine
+# gen-scope
 
 Demand-driven attribute grammar evaluator over algebraic scope graphs, implemented as a pure Nix library.
 
-scope-engine is a **hybrid HOAG/RAG** evaluator: Higher-Order Attribute Grammars (Vogt et al., 1989) for dynamic node synthesis, Reference Attribute Grammars (Hedin, 2000) for cross-node references via import edges. It leverages Nix's native lazy evaluation for attribute computation, memoization, and cycle detection — we do not build an AG evaluator, Nix **is** the evaluator.
+gen-scope is a **hybrid HOAG/RAG** evaluator: Higher-Order Attribute Grammars (Vogt et al., 1989) for dynamic node synthesis, Reference Attribute Grammars (Hedin, 2000) for cross-node references via import edges. It leverages Nix's native lazy evaluation for attribute computation, memoization, and cycle detection — we do not build an AG evaluator, Nix **is** the evaluator.
 
-scope-engine is generic. It has no knowledge of NixOS, aspects, policies, or system configuration. It provides evaluation machinery; consumers define what to compute.
+gen-scope is generic. It has no knowledge of NixOS, aspects, policies, or system configuration. It provides evaluation machinery; consumers define what to compute.
+
+## Terminology
+
+| Term | Definition |
+|------|-----------|
+| Nodes | Scope graph vertices built by `buildNodes` |
+| Edges | Labeled relationships: P (parent/lexical), I (import/composition), custom |
+| Attributes | Computed values on nodes — demand-driven, memoized by Nix laziness |
+| Combinators | Attribute constructors: inherit', circular, paramAttr, collectionAttr, query |
+
+## Gen Ecosystem
+
+| Library | Role |
+|---------|------|
+| [gen](https://github.com/sini/gen) | Pure primitives (search, record, identity) |
+| [gen-schema](https://github.com/sini/gen-schema) | Typed registries (kinds, instances, collections, refs) |
+| [gen-aspects](https://github.com/sini/gen-aspects) | Aspect types (traits, classification, dispatch) |
+| [gen-graph](https://github.com/sini/gen-graph) | Graph queries (combinators, traversals, fixpoint) |
+| [gen-scope](https://github.com/sini/gen-scope) | Scope graphs (construction, evaluation, resolution) |
 
 ## Usage
 
 ```nix
 # flake.nix
 {
-  inputs.scope-engine.url = "github:sini/scope-engine";
-  outputs = { scope-engine, nixpkgs, ... }:
+  inputs.gen-scope.url = "github:sini/gen-scope";
+  outputs = { gen-scope, nixpkgs, ... }:
     let
-      engine = scope-engine { lib = nixpkgs.lib; };
+      engine = gen-scope { lib = nixpkgs.lib; };
     in { /* ... */ };
 }
 
 # Or without flakes:
 let
-  engine = import ./scope-engine { inherit lib; };
+  engine = import ./gen-scope { inherit lib; };
 in { /* ... */ }
 ```
 
@@ -30,7 +49,7 @@ A hierarchical configuration system: departments contain teams, teams inherit de
 
 ```nix
 let
-  engine = import ./scope-engine { inherit lib; };
+  engine = import ./gen-scope { inherit lib; };
 
   # Algebraic graph: departments → teams
   parentGraph = engine.overlay
@@ -217,6 +236,16 @@ ambiguous { dataFilter; ... } self id  # → bool
 
 Returns `true` when multiple declarations are reachable via `queryAll`. Built on `queryAll` for detecting shadowing ambiguity (van Antwerpen 2018).
 
+#### `visibleFrom`
+
+Convenience wrapper over `query` — resolves a single visible declaration from a scope.
+
+```nix
+visibleFrom = dataFilter: self: nodeId: ...
+```
+
+Returns the single visible value matching `dataFilter`, or `null`.
+
 ### Named Attribute Constructors
 
 Kiama-inspired vocabulary (Sloane et al., 2010) for self-documenting attribute definitions.
@@ -252,6 +281,33 @@ circular {
 
 Fixed-point iteration from an initial value (Sloane 2010 §2.2). The attribute function `f` receives `self`, `id`, and the previous value, producing the next value. Iterates until `eq prev next` or `maxIter` is reached.
 
+#### `collectionAttr`
+
+Collection attribute combinator (Sloane 2010 §7). Traverses scope neighbors, extracts values, combines results.
+
+```nix
+collectionAttr = {
+  traverse ? "imports",  # "imports", "children", "siblings", "ancestors", "label:<name>", or custom fn
+  extract,               # self: id: -> [values] or null
+  combine ? a: b: a ++ b,
+  filter ? _: true,
+}: self: id: ...
+```
+
+#### `inheritAll`
+
+Accumulates values along the entire parent chain (unlike `inherit'` which returns the first match).
+
+```nix
+inheritAll = {
+  extract,                # node -> value or null
+  combine ? a: b: a ++ b,
+  _visited ? {},
+}: self: id: ...
+```
+
+Cycle-safe via attrset-based visited set. Used for constraint propagation (e.g., `meta.drop` accumulation).
+
 ### Collection
 
 | Function | Signature | Description |
@@ -281,12 +337,13 @@ eval {
   baseNodes;                   # Flat node map from buildNodes
   synthesize ? (_: {});        # HOAG function: self → { id → node }
   attributes;                  # { attrName = self: id: value; ... }
+  maxSynthIter ? 10;           # Maximum synthesis convergence iterations
 }
 ```
 
 Returns `{ nodes, evaluated }`. Access results via `result.evaluated.${id}.get "attrName"`.
 
-**`synthesize`** inspects the current graph and returns new nodes. Receives `{ nodes = baseNodes; evaluated; }` — it can read base node structure and demand attribute values, but cannot see its own synthesized output (monotone-add invariant). Synthesized nodes cannot overwrite base nodes.
+**`synthesize`** inspects the current graph and returns new nodes. Receives `{ nodes = baseNodes; evaluated; }` — it can read base node structure and demand attribute values, but cannot see its own synthesized output (monotone-add invariant). Synthesized nodes cannot overwrite base nodes. Synthesis iterates to convergence (Vogt 1989) — synthesized nodes can trigger further synthesis. Each iteration can only ADD nodes (monotone). The `maxSynthIter` parameter bounds the number of convergence iterations. Safety constraint: `synthesize` must not read evaluated attributes of nodes it creates in the same iteration.
 
 **`attributes`** are named functions. Each can read any attribute on any node via `self.evaluated.${nodeId}.get "attrName"`. Evaluation is demand-driven: only attributes that are accessed get computed.
 
@@ -299,7 +356,7 @@ evalDebug { baseNodes; synthesize ? (_: {}); attributes; }
 Diagnostic variant with shadow-stack cycle tracing. Same interface as `eval`, but threads a visited-set through `self` so that cycles produce structured error messages:
 
 ```
-scope-engine: cycle detected: a.headcount -> b.headcount -> a.headcount
+gen-scope: cycle detected: a.headcount -> b.headcount -> a.headcount
 ```
 
 instead of Nix's opaque `infinite recursion encountered`.
@@ -427,10 +484,10 @@ engine.query { dataFilter = n: n.rels.typeDecl.x or null; } result "inner"
 
 ```bash
 # Run all tests (requires nix-unit)
-nix eval --override-input scope-engine . ./templates/ci#tests
+nix eval --override-input gen-scope . ./templates/ci#tests
 
 # Run checks
-nix flake check --override-input scope-engine . ./templates/ci
+nix flake check --override-input gen-scope . ./templates/ci
 ```
 
 142 tests across 21 suites covering graph construction, scope resolution, inheritance, imports, HOAG synthesis, cycle detection, custom edge labels, ambiguity detection, and structural subtyping.
