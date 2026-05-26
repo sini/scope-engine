@@ -6,22 +6,33 @@ let
     parentGraph = engine.vertex "node";
     importGraph = engine.empty;
     decls = {
-      node = { init-val = 0; target = 10; };
+      node = {
+        init-val = 0;
+        target = 10;
+      };
     };
-    types = {};
+    types = { };
   };
 
   # Converging: increment until reaching target
   convergingResult = engine.eval {
     inherit roots;
     attributes = {
-      children = self: id: {};
-      imports = self: id: [];
-      counter = circular { init = 0; maxIter = 20; } (
-        self: id: prev:
-          let target = (self.node id).decls.target;
-          in if prev >= target then prev else prev + 1
-      );
+      children = self: id: { };
+      imports = self: id: [ ];
+      counter =
+        circular
+          {
+            init = 0;
+            maxIter = 20;
+          }
+          (
+            self: id: prev:
+            let
+              target = (self.node id).decls.target;
+            in
+            if prev >= target then prev else prev + 1
+          );
     };
   };
 
@@ -29,18 +40,27 @@ let
   divergingRoots = engine.buildNodes {
     parentGraph = engine.vertex "div";
     importGraph = engine.empty;
-    decls = { div = {}; };
-    types = {};
+    decls = {
+      div = { };
+    };
+    types = { };
   };
 
   divergingResult = engine.eval {
     roots = divergingRoots;
     attributes = {
-      children = self: id: {};
-      imports = self: id: [];
-      forever = circular { init = 0; maxIter = 5; } (
-        self: id: prev: prev + 1
-      );
+      children = self: id: { };
+      imports = self: id: [ ];
+      forever =
+        circular
+          {
+            init = 0;
+            maxIter = 5;
+          }
+          (
+            self: id: prev:
+            prev + 1
+          );
     };
   };
 
@@ -48,15 +68,19 @@ let
   customEqResult = engine.eval {
     inherit roots;
     attributes = {
-      children = self: id: {};
-      imports = self: id: [];
-      approx = circular {
-        init = 0.0;
-        eq = a: b: (b - a) < 0.5;
-        maxIter = 100;
-      } (
-        self: id: prev: prev + 0.3
-      );
+      children = self: id: { };
+      imports = self: id: [ ];
+      approx =
+        circular
+          {
+            init = 0.0;
+            eq = a: b: (b - a) < 0.5;
+            maxIter = 100;
+          }
+          (
+            self: id: prev:
+            prev + 0.3
+          );
     };
   };
 in
@@ -69,7 +93,10 @@ in
 
     test-diverge-throws = {
       expr = builtins.tryEval (divergingResult.get "div" "forever");
-      expected = { success = false; value = false; };
+      expected = {
+        success = false;
+        value = false;
+      };
     };
 
     test-custom-eq-converges = {

@@ -10,19 +10,26 @@ let
       (engine.edge "b" "c")
     ];
     decls = {
-      root = { val = "from-root"; };
-      a = {};
-      b = { val = "from-b"; };
-      c = { val = "from-c"; extra = "c-extra"; };
+      root = {
+        val = "from-root";
+      };
+      a = { };
+      b = {
+        val = "from-b";
+      };
+      c = {
+        val = "from-c";
+        extra = "c-extra";
+      };
     };
-    types = {};
+    types = { };
   };
 
   result = engine.eval {
     inherit roots;
     attributes = {
       children = self: id: lib.filterAttrs (_: n: n.parent == id) roots;
-      imports = self: id: (self.node id).decls.__edges.I or [];
+      imports = self: id: (self.node id).decls.__edges.I or [ ];
       resolved = query {
         dataFilter = node: node.decls.val or null;
       };
@@ -34,7 +41,7 @@ let
     inherit roots;
     attributes = {
       children = self: id: lib.filterAttrs (_: n: n.parent == id) roots;
-      imports = self: id: (self.node id).decls.__edges.I or [];
+      imports = self: id: (self.node id).decls.__edges.I or [ ];
       resolved = query {
         dataFilter = node: node.decls.val or null;
         transitiveImports = true;
@@ -47,7 +54,7 @@ let
     inherit roots;
     attributes = {
       children = self: id: lib.filterAttrs (_: n: n.parent == id) roots;
-      imports = self: id: (self.node id).decls.__edges.I or [];
+      imports = self: id: (self.node id).decls.__edges.I or [ ];
       all-vals = queryAll {
         dataFilter = node: node.decls.val or null;
       };
@@ -63,18 +70,22 @@ let
       (engine.edge "x" "z")
     ];
     decls = {
-      x = {};
-      y = { val = "from-y"; };
-      z = { val = "from-z"; };
+      x = { };
+      y = {
+        val = "from-y";
+      };
+      z = {
+        val = "from-z";
+      };
     };
-    types = {};
+    types = { };
   };
 
   ambResult = engine.eval {
     roots = ambRoots;
     attributes = {
-      children = self: id: {};
-      imports = self: id: (self.node id).decls.__edges.I or [];
+      children = self: id: { };
+      imports = self: id: (self.node id).decls.__edges.I or [ ];
       is-ambiguous = ambiguous {
         dataFilter = node: node.decls.val or null;
       };

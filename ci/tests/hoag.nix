@@ -9,10 +9,18 @@ let
     ];
     importGraph = engine.empty;
     decls = {
-      env = { name = "production"; };
-      host1 = { hostname = "srv1"; };
-      user1 = { username = "alice"; };
-      user2 = { username = "bob"; };
+      env = {
+        name = "production";
+      };
+      host1 = {
+        hostname = "srv1";
+      };
+      user1 = {
+        username = "alice";
+      };
+      user2 = {
+        username = "bob";
+      };
     };
     types = {
       env = "env";
@@ -25,12 +33,14 @@ let
   result = engine.eval {
     inherit roots;
     attributes = {
-      children = self: id:
-        lib.filterAttrs (_: n: n.parent == id) roots;
-      imports = self: id: [];
-      label = self: id:
-        let node = self.node id;
-        in node.decls.hostname or node.decls.username or node.decls.name or id;
+      children = self: id: lib.filterAttrs (_: n: n.parent == id) roots;
+      imports = self: id: [ ];
+      label =
+        self: id:
+        let
+          node = self.node id;
+        in
+        node.decls.hostname or node.decls.username or node.decls.name or id;
     };
     parseParent = id: (roots.${id} or { parent = null; }).parent;
   };
@@ -40,36 +50,54 @@ let
     parentGraph = engine.edge "svc" "cluster";
     importGraph = engine.empty;
     decls = {
-      cluster = { proxy = true; };
-      svc = { port = 8080; };
+      cluster = {
+        proxy = true;
+      };
+      svc = {
+        port = 8080;
+      };
     };
-    types = { cluster = "cluster"; svc = "service"; };
+    types = {
+      cluster = "cluster";
+      svc = "service";
+    };
   };
 
   proxyResult = engine.eval {
     roots = proxyRoots;
     attributes = {
-      children = self: id:
-        lib.filterAttrs (_: n: n.parent == id) proxyRoots;
-      imports = self: id: [];
-      derived-children = self: id:
-        let node = self.node id;
-        in if node.decls.proxy or false then {
-          "${id}-proxy" = {
-            id = "${id}-proxy";
-            type = "proxy";
-            parent = id;
-            decls = { upstream = id; };
-          };
-        } else {};
+      children = self: id: lib.filterAttrs (_: n: n.parent == id) proxyRoots;
+      imports = self: id: [ ];
+      derived-children =
+        self: id:
+        let
+          node = self.node id;
+        in
+        if node.decls.proxy or false then
+          {
+            "${id}-proxy" = {
+              id = "${id}-proxy";
+              type = "proxy";
+              parent = id;
+              decls = {
+                upstream = id;
+              };
+            };
+          }
+        else
+          { };
       port = self: id: (self.node id).decls.port or null;
     };
-    parseParent = id:
-      if proxyRoots ? ${id} then proxyRoots.${id}.parent
+    parseParent =
+      id:
+      if proxyRoots ? ${id} then
+        proxyRoots.${id}.parent
       else
         # Derived children: parse parent from id suffix
-        let parts = lib.splitString "-proxy" id;
-        in if builtins.length parts > 1 then builtins.head parts else null;
+        let
+          parts = lib.splitString "-proxy" id;
+        in
+        if builtins.length parts > 1 then builtins.head parts else null;
   };
 in
 {
@@ -96,7 +124,10 @@ in
 
     test-multi-level-children-host = {
       expr = builtins.sort builtins.lessThan (builtins.attrNames (result.get "host1" "children"));
-      expected = [ "user1" "user2" ];
+      expected = [
+        "user1"
+        "user2"
+      ];
     };
 
     test-multi-level-parent-chain = {
@@ -116,7 +147,7 @@ in
 
     test-derived-children-non-proxy = {
       expr = proxyResult.get "svc" "derived-children";
-      expected = {};
+      expected = { };
     };
 
     test-derived-child-reachable = {
@@ -131,7 +162,11 @@ in
 
     test-allNodes-includes-derived = {
       expr = builtins.sort builtins.lessThan (builtins.attrNames proxyResult.allNodes);
-      expected = [ "cluster" "cluster-proxy" "svc" ];
+      expected = [
+        "cluster"
+        "cluster-proxy"
+        "svc"
+      ];
     };
   };
 }

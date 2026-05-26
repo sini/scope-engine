@@ -1,6 +1,14 @@
 { lib, engine, ... }:
 let
-  inherit (engine) parent children childrenIds ancestors siblings descendants nodesByType;
+  inherit (engine)
+    parent
+    children
+    childrenIds
+    ancestors
+    siblings
+    descendants
+    nodesByType
+    ;
 
   # Tree: root → {a, b}; a → {c}
   roots = engine.buildNodes {
@@ -11,19 +19,24 @@ let
     ];
     importGraph = engine.empty;
     decls = {
-      root = {};
-      a = {};
-      b = {};
-      c = {};
+      root = { };
+      a = { };
+      b = { };
+      c = { };
     };
-    types = { root = "env"; a = "host"; b = "host"; c = "user"; };
+    types = {
+      root = "env";
+      a = "host";
+      b = "host";
+      c = "user";
+    };
   };
 
   result = engine.eval {
     inherit roots;
     attributes = {
       children = self: id: lib.filterAttrs (_: n: n.parent == id) roots;
-      imports = self: id: [];
+      imports = self: id: [ ];
     };
     parseParent = id: (roots.${id} or { parent = null; }).parent;
   };
@@ -42,27 +55,36 @@ in
 
     test-children-of-root = {
       expr = builtins.sort builtins.lessThan (builtins.attrNames (children result "root"));
-      expected = [ "a" "b" ];
+      expected = [
+        "a"
+        "b"
+      ];
     };
 
     test-children-of-leaf = {
       expr = builtins.attrNames (children result "c");
-      expected = [];
+      expected = [ ];
     };
 
     test-childrenIds = {
       expr = builtins.sort builtins.lessThan (childrenIds result "root");
-      expected = [ "a" "b" ];
+      expected = [
+        "a"
+        "b"
+      ];
     };
 
     test-ancestors-of-c = {
       expr = ancestors result "c";
-      expected = [ "a" "root" ];
+      expected = [
+        "a"
+        "root"
+      ];
     };
 
     test-ancestors-of-root = {
       expr = ancestors result "root";
-      expected = [];
+      expected = [ ];
     };
 
     test-siblings-of-a = {
@@ -72,12 +94,16 @@ in
 
     test-siblings-of-root = {
       expr = siblings result "root";
-      expected = [];
+      expected = [ ];
     };
 
     test-descendants-of-root = {
       expr = builtins.sort builtins.lessThan (descendants result "root");
-      expected = [ "a" "b" "c" ];
+      expected = [
+        "a"
+        "b"
+        "c"
+      ];
     };
 
     test-descendants-of-a = {
@@ -87,12 +113,15 @@ in
 
     test-descendants-of-leaf = {
       expr = descendants result "c";
-      expected = [];
+      expected = [ ];
     };
 
     test-nodesByType-host = {
       expr = builtins.sort builtins.lessThan (builtins.attrNames (nodesByType result "host"));
-      expected = [ "a" "b" ];
+      expected = [
+        "a"
+        "b"
+      ];
     };
 
     test-nodesByType-user = {
@@ -102,7 +131,7 @@ in
 
     test-nodesByType-missing = {
       expr = nodesByType result "nonexistent";
-      expected = {};
+      expected = { };
     };
   };
 }
