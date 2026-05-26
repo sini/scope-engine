@@ -29,7 +29,7 @@ Nix attrset VALUES are lazy but KEYS are eager. Function application is never me
 
 | Library | Role |
 |---------|------|
-| [gen](https://github.com/sini/gen) | Pure primitives (search, record, identity) |
+| [gen-algebra](https://github.com/sini/gen-algebra) | Pure primitives (search, record, identity) |
 | [gen-schema](https://github.com/sini/gen-schema) | Typed registries (kinds, instances, collections, refs) |
 | [gen-aspects](https://github.com/sini/gen-aspects) | Aspect types (traits, classification, dispatch) |
 | [gen-graph](https://github.com/sini/gen-graph) | Graph queries (combinators, traversals, fixpoint) |

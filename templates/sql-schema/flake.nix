@@ -4,7 +4,7 @@
     gen-scope.url = "github:sini/gen-scope";
     gen-schema.url = "github:sini/gen-schema";
     gen-graph.url = "github:sini/gen-graph";
-    gen.url = "github:sini/gen";
+    gen-algebra.url = "github:sini/gen-algebra";
     nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
   };
   outputs =
@@ -12,14 +12,14 @@
       gen-scope,
       gen-schema,
       gen-graph,
-      gen,
+      gen-algebra,
       nixpkgs,
       ...
     }:
     let
       lib = nixpkgs.lib;
       engine = gen-scope { inherit lib; };
-      genLib = gen { inherit lib; };
+      genLib = gen-algebra { inherit lib; };
       schemaLib = import "${gen-schema}/nix/lib" {
         inherit lib;
         inputs = {

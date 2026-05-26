@@ -754,5 +754,5 @@ nix eval .#tests
 - [gen-schema](https://github.com/sini/gen-schema) — typed record registries with refinement contracts and mixins
 - [gen-graph](https://github.com/sini/gen-graph) — monotonic query combinators over scope graphs
 - [scope-engine](https://github.com/sini/scope-engine) — demand-driven attribute grammar evaluator
-- [gen](https://github.com/sini/gen) — record algebra, search monad, intensional functions
+- [gen-algebra](https://github.com/sini/gen-algebra) — record algebra, search monad, intensional functions
 - [nest-traits](../nest-traits/) — the CSS selector equivalent of this SQL demo
