@@ -386,7 +386,7 @@ Thin wrappers over `self.node` and `self.get`:
 ## Testing
 
 ```bash
-cd templates/ci
+cd ci
 just ci              # run all tests
 just ci eval         # run eval suite
 just ci eval.test-basic-root-attribute  # specific test
