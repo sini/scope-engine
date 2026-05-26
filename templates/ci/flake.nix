@@ -16,6 +16,7 @@
     let
       inherit (nixpkgs) lib;
       engine = gen-scope { inherit lib; };
+      forAllSystems = lib.genAttrs lib.systems.flakeExposed;
       testFiles = lib.pipe (builtins.readDir ./tests) [
         (lib.filterAttrs (n: v: v == "regular" && lib.hasSuffix ".nix" n))
         builtins.attrNames
@@ -26,7 +27,7 @@
     in
     {
       inherit tests;
-      checks = lib.genAttrs lib.systems.flakeExposed (
+      checks = forAllSystems (
         system:
         let
           pkgs = nixpkgs.legacyPackages.${system};
@@ -46,14 +47,17 @@
           '';
         }
       );
-      devShells = lib.genAttrs lib.systems.flakeExposed (
+      devShells = forAllSystems (
         system:
         let
           pkgs = nixpkgs.legacyPackages.${system};
         in
         {
           default = pkgs.mkShell {
-            packages = [ nix-unit.packages.${system}.default ];
+            packages = [
+              nix-unit.packages.${system}.default
+              pkgs.just
+            ];
           };
         }
       );
