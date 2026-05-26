@@ -24,7 +24,6 @@ gen-scope is generic. It has no knowledge of NixOS, aspects, policies, or system
 - [Performance](#performance)
 - [Testing](#testing)
 - [Theoretical Foundations](#theoretical-foundations)
-- [License](#license)
 
 ## Core Insight
 
@@ -409,7 +408,3 @@ Requires nix-unit. 120+ tests across 10 suites.
 | Radul & Sussman (2009) "Art of the propagator" | **Informed by** | Monotonic convergence concept for `circular` attribute iteration; cells accepting information from multiple sources as design influence on scope graph merging |
 | Van Wyk et al. (2010) "Silver: extensible AG" | **Informed by** | Forwarding concept (productions defining default attribute values via translation); collection attributes with fold operators as design influence on `collectionAttr` |
 | Mokhov et al. (2018) "Build systems a la carte" | **Informed by** | Demand-driven evaluation as suspending scheduler (§4.1); Nix's lazy evaluation recognized as the scheduling mechanism — we do not build a scheduler, Nix is the scheduler |
-
-## License
-
-MIT
