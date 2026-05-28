@@ -262,6 +262,12 @@ in
     buildHostConfig
     buildAllHostConfigs
     ;
-  inherit deriveLib selectLib demoRules;
+  inherit
+    deriveLib
+    selectLib
+    bindLib
+    graphLib
+    demoRules
+    ;
   inherit hostConfigs queryHostConfigs;
 }

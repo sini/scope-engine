@@ -1580,4 +1580,94 @@ in
       ];
     };
   };
+
+  # ─── Cross-library bridge demos ─────────────────────────────────
+  # Showcases all 8 gen-* libraries in cross-library pipeline queries:
+  #   gen-algebra, gen-schema, gen-scope, gen-graph,
+  #   gen-select, gen-derive, gen-bind, nixpkgs lib
+
+  bridge =
+    let
+      sel = sql.selectLib;
+    in
+    {
+      # Pipeline 1: gen-select selector → filter instance graph nodes
+      # "Which server-type nodes are in the instance graph?"
+      test-select-to-graph = {
+        expr =
+          let
+            prodSelector = sel.when (_id: ctx: (ctx.data _id).type == "server");
+            ctx = {
+              data = id: sql.instanceNodes.nodeData id;
+              parent = _: null;
+              children = _: [ ];
+              ancestors = _: [ ];
+              siblings = _: [ ];
+            };
+            serverNodes = builtins.filter (id: lib.hasPrefix "server:" id) sql.instanceNodes.nodes;
+            matching = builtins.filter (id: sel.matches prodSelector id ctx) serverNodes;
+          in
+          builtins.sort builtins.lessThan matching;
+        expected = [
+          "server:api-1"
+          "server:db-1"
+          "server:web-1"
+          "server:web-2"
+        ];
+      };
+
+      # Pipeline 2: gen-select selector → gen-derive dispatch → action
+      test-selector-derive-dispatch = {
+        expr =
+          let
+            inherit (sql.deriveLib) mkRule dispatch entryAnywhere;
+            match = sql.deriveLib.adapters.select.mkMatch sel;
+            testRule = mkRule {
+              condition = sel.when (_id: ctx: builtins.elem "web" ((ctx.data _id).tags or [ ]));
+              produce = _id: _ctx: [
+                {
+                  __action = "tagged";
+                  value = true;
+                }
+              ];
+              identity = "bridge-test";
+            };
+            serverCtx = sql.mkServerContext {
+              tags = [
+                "web"
+                "proxy"
+              ];
+              environment = "prod";
+            };
+            result = dispatch {
+              rules = [ testRule ];
+              id = "test-server";
+              context = serverCtx;
+              inherit match;
+              classify = _: "default";
+              phases = {
+                default = entryAnywhere { };
+              };
+            };
+          in
+          builtins.length (result.actions.default or [ ]) > 0;
+        expected = true;
+      };
+
+      # Pipeline 3: gen-schema introspection → gen-graph reachability
+      # "Which schema kinds are reachable from 'server' via ref/parent edges?"
+      test-schema-graph-reachability = {
+        expr =
+          let
+            reachable = graphLib.reachableFrom sql.kindNodes "server";
+          in
+          builtins.sort builtins.lessThan reachable;
+        expected = [
+          "datacenter"
+          "environment"
+          "network"
+          "subnet"
+        ];
+      };
+    };
 }
