@@ -19,14 +19,8 @@
     let
       node = self.nodes.${id};
       local = node.decls;
-      importedDecls = lib.foldl' (
-        acc: iid: engine.shadow (self.nodes.${iid}.decls) acc
-      ) { } node.imports;
-      parentDecls =
-        if node.parent != null then
-          self.evaluated.${node.parent}.get "visibleDecls"
-        else
-          { };
+      importedDecls = lib.foldl' (acc: iid: engine.shadow (self.nodes.${iid}.decls) acc) { } node.imports;
+      parentDecls = if node.parent != null then self.evaluated.${node.parent}.get "visibleDecls" else { };
     in
     engine.shadow local (engine.shadow importedDecls parentDecls);
 

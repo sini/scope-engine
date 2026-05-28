@@ -13,7 +13,10 @@
       engine = gen-scope { inherit lib; };
       graph = import ./graph.nix { inherit engine; };
       attributes = import ./attributes.nix { inherit engine lib; };
-      result = engine.eval { inherit (graph) baseNodes synthesize; inherit attributes; };
+      result = engine.eval {
+        inherit (graph) baseNodes synthesize;
+        inherit attributes;
+      };
     in
     {
       tests = import ./tests.nix { inherit engine lib result; };

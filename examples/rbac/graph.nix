@@ -24,8 +24,14 @@
   baseNodes = engine.buildNodes {
     # Resource hierarchy (parent edges)
     parentGraph = engine.overlays [
-      (engine.star "org" [ "project-x" "project-y" ])
-      (engine.star "project-x" [ "doc-1" "doc-2" ])
+      (engine.star "org" [
+        "project-x"
+        "project-y"
+      ])
+      (engine.star "project-x" [
+        "doc-1"
+        "doc-2"
+      ])
       (engine.edge "doc-3" "project-y")
     ];
     edgeGraphs = {
@@ -47,24 +53,77 @@
       D = engine.edge "dave" "project-x";
     };
     decls = {
-      viewer = { read = true; }; editor = { write = true; };
-      admin = { delete = true; manage = true; }; auditor = { audit = true; };
-      alice = { email = "alice@corp.com"; }; bob = { email = "bob@corp.com"; };
-      carol = { email = "carol@corp.com"; }; dave = { email = "dave@corp.com"; };
-      org = { name = "Acme Corp"; };
-      "project-x" = { name = "Project X"; sensitivity = "high"; };
-      "project-y" = { name = "Project Y"; sensitivity = "low"; };
-      "doc-1" = { title = "Design doc"; }; "doc-2" = { title = "API spec"; };
-      "doc-3" = { title = "Roadmap"; };
+      viewer = {
+        read = true;
+      };
+      editor = {
+        write = true;
+      };
+      admin = {
+        delete = true;
+        manage = true;
+      };
+      auditor = {
+        audit = true;
+      };
+      alice = {
+        email = "alice@corp.com";
+      };
+      bob = {
+        email = "bob@corp.com";
+      };
+      carol = {
+        email = "carol@corp.com";
+      };
+      dave = {
+        email = "dave@corp.com";
+      };
+      org = {
+        name = "Acme Corp";
+      };
+      "project-x" = {
+        name = "Project X";
+        sensitivity = "high";
+      };
+      "project-y" = {
+        name = "Project Y";
+        sensitivity = "low";
+      };
+      "doc-1" = {
+        title = "Design doc";
+      };
+      "doc-2" = {
+        title = "API spec";
+      };
+      "doc-3" = {
+        title = "Roadmap";
+      };
     };
     types = {
-      viewer = "role"; editor = "role"; admin = "role"; auditor = "role";
-      alice = "user"; bob = "user"; carol = "user"; dave = "user";
-      org = "resource"; "project-x" = "resource"; "project-y" = "resource";
-      "doc-1" = "resource"; "doc-2" = "resource"; "doc-3" = "resource";
+      viewer = "role";
+      editor = "role";
+      admin = "role";
+      auditor = "role";
+      alice = "user";
+      bob = "user";
+      carol = "user";
+      dave = "user";
+      org = "resource";
+      "project-x" = "resource";
+      "project-y" = "resource";
+      "doc-1" = "resource";
+      "doc-2" = "resource";
+      "doc-3" = "resource";
     };
     relations = {
-      dave = { deny = { "project-x" = [ "delete" "manage" ]; }; };
+      dave = {
+        deny = {
+          "project-x" = [
+            "delete"
+            "manage"
+          ];
+        };
+      };
     };
   };
 }

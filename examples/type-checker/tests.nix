@@ -1,12 +1,20 @@
 # Type checker tests.
-{ engine, lib, result }:
+{
+  engine,
+  lib,
+  result,
+}:
 {
   # ─── Structural subtyping (van Antwerpen 2018 §2.3) ────────────
 
   point2d-subtype-of-point3d = engine.subtypeOf { } result "Point2D" "Point3D";
   point3d-not-subtype-of-point2d = engine.subtypeOf { } result "Point3D" "Point2D";
   color-not-subtype-of-point3d = engine.subtypeOf { } result "Color" "Point3D";
-  point2d-value-subtype = engine.subtypeOf { eq = _k: a: b: a == b; } result "Point2D" "Point3D";
+  point2d-value-subtype = engine.subtypeOf {
+    eq =
+      _k: a: b:
+      a == b;
+  } result "Point2D" "Point3D";
 
   # ─── Record extension via R edges (van Antwerpen 2018 Fig. 4) ──
 
@@ -60,8 +68,9 @@
   pair-fields = result.nodes."Pair<Num,String>".decls;
   pair-type = result.nodes."Pair<Num,String>".type;
 
-  all-records = builtins.sort builtins.lessThan
-    (builtins.attrNames (engine.nodesByType result "record"));
+  all-records = builtins.sort builtins.lessThan (
+    builtins.attrNames (engine.nodesByType result "record")
+  );
 
   # ─── Custom edge labels ─────────────────────────────────────────
 

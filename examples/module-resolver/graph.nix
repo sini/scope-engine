@@ -25,8 +25,17 @@
 let
   # Parent edges encode lexical nesting.
   parentGraph = engine.overlays [
-    (engine.star "root" [ "Std" "App" "Cycle1" "Cycle2" ])
-    (engine.star "Std" [ "Std.IO" "Std.Math" "Std.String" ])
+    (engine.star "root" [
+      "Std"
+      "App"
+      "Cycle1"
+      "Cycle2"
+    ])
+    (engine.star "Std" [
+      "Std.IO"
+      "Std.Math"
+      "Std.String"
+    ])
     (engine.edge "App.Sub" "App")
   ];
 
@@ -45,19 +54,40 @@ let
     decls = {
       root = { };
       Std = { };
-      "Std.IO" = { print = "io.print"; format = "io.format"; };
-      "Std.Math" = { sqrt = "math.sqrt"; pi = 3; };
-      "Std.String" = { concat = "string.concat"; };
-      App = { main = "app.main"; };
-      "App.Sub" = { helper = "sub.helper"; };
-      Cycle1 = { val = "c1"; };
-      Cycle2 = { val = "c2"; };
+      "Std.IO" = {
+        print = "io.print";
+        format = "io.format";
+      };
+      "Std.Math" = {
+        sqrt = "math.sqrt";
+        pi = 3;
+      };
+      "Std.String" = {
+        concat = "string.concat";
+      };
+      App = {
+        main = "app.main";
+      };
+      "App.Sub" = {
+        helper = "sub.helper";
+      };
+      Cycle1 = {
+        val = "c1";
+      };
+      Cycle2 = {
+        val = "c2";
+      };
     };
     types = {
       root = "root";
-      Std = "module"; "Std.IO" = "module"; "Std.Math" = "module"; "Std.String" = "module";
-      App = "module"; "App.Sub" = "module";
-      Cycle1 = "module"; Cycle2 = "module";
+      Std = "module";
+      "Std.IO" = "module";
+      "Std.Math" = "module";
+      "Std.String" = "module";
+      App = "module";
+      "App.Sub" = "module";
+      Cycle1 = "module";
+      Cycle2 = "module";
     };
   };
 in

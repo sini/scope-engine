@@ -1,5 +1,9 @@
 # Feature flag tests.
-{ engine, lib, result }:
+{
+  engine,
+  lib,
+  result,
+}:
 {
   alice-dark-mode = result.evaluated."user:alice".get "flag" "dark-mode";
   alice-new-editor = result.evaluated."user:alice".get "flag" "new-editor";
@@ -14,13 +18,24 @@
   alice-ai-assist = result.evaluated."user:alice".get "flagWithDeps" "ai-assist";
   bob-ai-assist-blocked = !(result.evaluated."user:bob".get "flag" "new-editor");
 
-  alice-effective = let f = result.evaluated."user:alice".get "effectiveFlags"; in {
-    dark-mode = f.dark-mode; new-editor = f.new-editor;
-    max-items = f.max-items; beta-features = f.beta-features;
-  };
-  dave-effective = let f = result.evaluated."user:dave".get "effectiveFlags"; in {
-    dark-mode = f.dark-mode; beta-features = f.beta-features;
-  };
+  alice-effective =
+    let
+      f = result.evaluated."user:alice".get "effectiveFlags";
+    in
+    {
+      dark-mode = f.dark-mode;
+      new-editor = f.new-editor;
+      max-items = f.max-items;
+      beta-features = f.beta-features;
+    };
+  dave-effective =
+    let
+      f = result.evaluated."user:dave".get "effectiveFlags";
+    in
+    {
+      dark-mode = f.dark-mode;
+      beta-features = f.beta-features;
+    };
 
   alpha-override-count = result.evaluated."project:alpha".get "overrideCount";
   global-override-count = result.evaluated.global.get "overrideCount";

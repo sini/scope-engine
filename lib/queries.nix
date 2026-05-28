@@ -10,38 +10,67 @@ let
 
   childrenIds = self: id: builtins.attrNames (self.get id "children");
 
-  ancestors = self: id:
+  ancestors =
+    self: id:
     let
-      go = visited: nid:
-        let p = (self.node nid).parent;
-        in if p == null then []
-        else if visited ? ${p} then []
-        else [ p ] ++ go (visited // { ${p} = true; }) p;
-    in go { ${id} = true; } id;
+      go =
+        visited: nid:
+        let
+          p = (self.node nid).parent;
+        in
+        if p == null then
+          [ ]
+        else if visited ? ${p} then
+          [ ]
+        else
+          [ p ] ++ go (visited // { ${p} = true; }) p;
+    in
+    go { ${id} = true; } id;
 
-  siblings = self: id:
-    let p = (self.node id).parent;
-    in if p == null then []
-    else builtins.filter (cid: cid != id) (builtins.attrNames (self.get p "children"));
-
-  descendants = self: id:
+  siblings =
+    self: id:
     let
-      go = visited: nid:
-        let cids = builtins.attrNames (self.get nid "children");
-        in lib.concatMap (cid:
-          if visited ? ${cid} then []
-          else [ cid ] ++ go (visited // { ${cid} = true; }) cid
+      p = (self.node id).parent;
+    in
+    if p == null then
+      [ ]
+    else
+      builtins.filter (cid: cid != id) (builtins.attrNames (self.get p "children"));
+
+  descendants =
+    self: id:
+    let
+      go =
+        visited: nid:
+        let
+          cids = builtins.attrNames (self.get nid "children");
+        in
+        lib.concatMap (
+          cid: if visited ? ${cid} then [ ] else [ cid ] ++ go (visited // { ${cid} = true; }) cid
         ) cids;
-    in go { ${id} = true; } id;
+    in
+    go { ${id} = true; } id;
 
-  isAncestor = self: ancestorId: id: builtins.elem ancestorId (ancestors self id);
+  isAncestor =
+    self: ancestorId: id:
+    builtins.elem ancestorId (ancestors self id);
 
-  isDescendant = self: descendantId: id: builtins.elem descendantId (descendants self id);
+  isDescendant =
+    self: descendantId: id:
+    builtins.elem descendantId (descendants self id);
 
-  nodesByType = self: type:
-    lib.filterAttrs (_: n: n.type == type) self.allNodes;
+  nodesByType = self: type: lib.filterAttrs (_: n: n.type == type) self.allNodes;
 in
 {
-  inherit parent children childrenIds ancestors siblings descendants
-    isAncestor isDescendant nodesByType;
+  inherit
+    parent
+    children
+    childrenIds
+    ancestors
+    siblings
+    descendants
+    isAncestor
+    isDescendant
+    nodesByType
+    ;
 }

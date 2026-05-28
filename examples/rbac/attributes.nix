@@ -10,9 +10,9 @@ let
     let
       node = self.nodes.${roleId};
       local = lib.filterAttrs (_: v: v == true) node.decls;
-      inherited = lib.foldl' (
-        acc: rid: acc // (rolePermissions self rid)
-      ) { } (engine.followEdge "R" self roleId);
+      inherited = lib.foldl' (acc: rid: acc // (rolePermissions self rid)) { } (
+        engine.followEdge "R" self roleId
+      );
     in
     local // inherited;
 in
@@ -22,8 +22,7 @@ in
   attributes = {
     permissions =
       self: id:
-      lib.foldl' (acc: rid: acc // (rolePermissions self rid)) { }
-        (engine.followEdge "A" self id);
+      lib.foldl' (acc: rid: acc // (rolePermissions self rid)) { } (engine.followEdge "A" self id);
 
     hasPermission = engine.paramAttr (
       self: id: perm:

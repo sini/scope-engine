@@ -15,83 +15,159 @@ let
 
   # Refinement contracts
   refinements = {
-    cidr = [{
-      check = v: builtins.match "[0-9]+\\.[0-9]+\\.[0-9]+\\.[0-9]+/[0-9]+" v != null;
-      message = "must be valid CIDR notation (e.g., 10.0.0.0/16)";
-    }];
-    ipv4Address = [{
-      check = v: builtins.match "[0-9]+\\.[0-9]+\\.[0-9]+\\.[0-9]+" v != null;
-      message = "must be a valid IPv4 address";
-    }];
-    macAddress = [{
-      check = v: builtins.match "[0-9a-fA-F][0-9a-fA-F](:[0-9a-fA-F][0-9a-fA-F]){5}" v != null;
-      message = "must be a valid MAC address (e.g., 00:11:22:33:44:55)";
-    }];
-    vlanId = [{
-      check = v: v >= 1 && v <= 4094;
-      message = "VLAN ID must be 1-4094";
-    }];
-    envTier = [{
-      check = v: builtins.elem v [ "dev" "staging" "prod" ];
-      message = "must be dev, staging, or prod";
-    }];
-    serviceProtocol = [{
-      check = v: builtins.elem v [ "tcp" "udp" "http" "grpc" ];
-      message = "must be tcp, udp, http, or grpc";
-    }];
-    dnsRecordType = [{
-      check = v: builtins.elem v [ "A" "AAAA" "CNAME" "MX" "TXT" ];
-      message = "must be A, AAAA, CNAME, MX, or TXT";
-    }];
-    lbAlgorithm = [{
-      check = v: builtins.elem v [ "roundrobin" "leastconn" "iphash" ];
-      message = "must be roundrobin, leastconn, or iphash";
-    }];
-    firewallAction = [{
-      check = v: builtins.elem v [ "allow" "deny" ];
-      message = "must be allow or deny";
-    }];
-    certIssuer = [{
-      check = v: builtins.elem v [ "letsencrypt" "internal-ca" "acme" ];
-      message = "must be letsencrypt, internal-ca, or acme";
-    }];
-    tcpPort = [{
-      check = v: v >= 1 && v <= 65535;
-      message = "must be a valid TCP port (1-65535)";
-    }];
-    positive = [{
-      check = v: v > 0;
-      message = "must be positive";
-    }];
-    nonEmpty = [{
-      check = v: v != "";
-      message = "must not be empty";
-    }];
+    cidr = [
+      {
+        check = v: builtins.match "[0-9]+\\.[0-9]+\\.[0-9]+\\.[0-9]+/[0-9]+" v != null;
+        message = "must be valid CIDR notation (e.g., 10.0.0.0/16)";
+      }
+    ];
+    ipv4Address = [
+      {
+        check = v: builtins.match "[0-9]+\\.[0-9]+\\.[0-9]+\\.[0-9]+" v != null;
+        message = "must be a valid IPv4 address";
+      }
+    ];
+    macAddress = [
+      {
+        check = v: builtins.match "[0-9a-fA-F][0-9a-fA-F](:[0-9a-fA-F][0-9a-fA-F]){5}" v != null;
+        message = "must be a valid MAC address (e.g., 00:11:22:33:44:55)";
+      }
+    ];
+    vlanId = [
+      {
+        check = v: v >= 1 && v <= 4094;
+        message = "VLAN ID must be 1-4094";
+      }
+    ];
+    envTier = [
+      {
+        check =
+          v:
+          builtins.elem v [
+            "dev"
+            "staging"
+            "prod"
+          ];
+        message = "must be dev, staging, or prod";
+      }
+    ];
+    serviceProtocol = [
+      {
+        check =
+          v:
+          builtins.elem v [
+            "tcp"
+            "udp"
+            "http"
+            "grpc"
+          ];
+        message = "must be tcp, udp, http, or grpc";
+      }
+    ];
+    dnsRecordType = [
+      {
+        check =
+          v:
+          builtins.elem v [
+            "A"
+            "AAAA"
+            "CNAME"
+            "MX"
+            "TXT"
+          ];
+        message = "must be A, AAAA, CNAME, MX, or TXT";
+      }
+    ];
+    lbAlgorithm = [
+      {
+        check =
+          v:
+          builtins.elem v [
+            "roundrobin"
+            "leastconn"
+            "iphash"
+          ];
+        message = "must be roundrobin, leastconn, or iphash";
+      }
+    ];
+    firewallAction = [
+      {
+        check =
+          v:
+          builtins.elem v [
+            "allow"
+            "deny"
+          ];
+        message = "must be allow or deny";
+      }
+    ];
+    certIssuer = [
+      {
+        check =
+          v:
+          builtins.elem v [
+            "letsencrypt"
+            "internal-ca"
+            "acme"
+          ];
+        message = "must be letsencrypt, internal-ca, or acme";
+      }
+    ];
+    tcpPort = [
+      {
+        check = v: v >= 1 && v <= 65535;
+        message = "must be a valid TCP port (1-65535)";
+      }
+    ];
+    positive = [
+      {
+        check = v: v > 0;
+        message = "must be positive";
+      }
+    ];
+    nonEmpty = [
+      {
+        check = v: v != "";
+        message = "must not be empty";
+      }
+    ];
   };
 
   # Row-polymorphic validators
   validators = {
     server-ram-proportional = mkFieldValidator {
       name = "server-ram-proportional";
-      fields = [ "cores" "ram_gb" ];
+      fields = [
+        "cores"
+        "ram_gb"
+      ];
       check = s: s.ram_gb >= s.cores * 2;
       message = "server RAM must be at least 2x cores";
     };
     dns-record-has-target = mkFieldValidator {
       name = "dns-record-has-target";
-      fields = [ "server" "loadbalancer" ];
+      fields = [
+        "server"
+        "loadbalancer"
+      ];
       check = r: r.server != null || r.loadbalancer != null;
       message = "DNS record must reference a server or loadbalancer";
     };
     cert-has-target = mkFieldValidator {
       name = "cert-has-target";
-      fields = [ "server" "loadbalancer" ];
+      fields = [
+        "server"
+        "loadbalancer"
+      ];
       check = c: c.server != null || c.loadbalancer != null;
       message = "certificate must be bound to a server or loadbalancer";
     };
     no-self-dependency = mkFieldValidator {
       name = "no-self-dependency";
-      fields = [ "upstream" "downstream" ];
+      fields = [
+        "upstream"
+        "downstream"
+      ];
       check = d: d.upstream != d.downstream;
       message = "service cannot depend on itself";
     };
@@ -99,7 +175,8 @@ let
 
   # Build the fully evaluated schema + fleet system.
   # fleet: raw attrset of kind → { instanceName → instanceData }
-  evalSchema = fleet:
+  evalSchema =
+    fleet:
     let
       eval = lib.evalModules {
         modules = [
@@ -142,11 +219,17 @@ let
               options.os = lib.mkOption { type = lib.types.str; };
               options.cores = lib.mkOption { type = lib.types.int; };
               options.ram_gb = lib.mkOption { type = lib.types.int; };
-              options.tags = lib.mkOption { type = lib.types.listOf lib.types.str; default = []; };
+              options.tags = lib.mkOption {
+                type = lib.types.listOf lib.types.str;
+                default = [ ];
+              };
               options.datacenter = lib.mkOption { type = ref "datacenter"; };
               options.environment = lib.mkOption { type = ref "environment"; };
               options.subnet = lib.mkOption { type = ref "subnet"; };
-              options.replaces = lib.mkOption { type = lib.types.nullOr (ref "server"); default = null; };
+              options.replaces = lib.mkOption {
+                type = lib.types.nullOr (ref "server");
+                default = null;
+              };
               validators = [ validators.server-ram-proportional ];
             };
 
@@ -194,8 +277,14 @@ let
               parent = "domain";
               options.type = lib.mkOption { type = lib.types.str; };
               options.ttl = lib.mkOption { type = lib.types.int; };
-              options.server = lib.mkOption { type = lib.types.nullOr (ref "server"); default = null; };
-              options.loadbalancer = lib.mkOption { type = lib.types.nullOr (ref "loadbalancer"); default = null; };
+              options.server = lib.mkOption {
+                type = lib.types.nullOr (ref "server");
+                default = null;
+              };
+              options.loadbalancer = lib.mkOption {
+                type = lib.types.nullOr (ref "loadbalancer");
+                default = null;
+              };
               options.domain = lib.mkOption { type = ref "domain"; };
               validators = [ validators.dns-record-has-target ];
             };
@@ -205,7 +294,10 @@ let
               options.algorithm = lib.mkOption { type = lib.types.str; };
               options.datacenter = lib.mkOption { type = ref "datacenter"; };
               options.environment = lib.mkOption { type = ref "environment"; };
-              options.failover = lib.mkOption { type = lib.types.nullOr (ref "loadbalancer"); default = null; };
+              options.failover = lib.mkOption {
+                type = lib.types.nullOr (ref "loadbalancer");
+                default = null;
+              };
             };
 
             config.schema.backend = {
@@ -220,8 +312,14 @@ let
             config.schema.firewall-rule = {
               options.src-subnet = lib.mkOption { type = ref "subnet"; };
               options.dst-subnet = lib.mkOption { type = ref "subnet"; };
-              options.src-server = lib.mkOption { type = lib.types.nullOr (ref "server"); default = null; };
-              options.dst-server = lib.mkOption { type = lib.types.nullOr (ref "server"); default = null; };
+              options.src-server = lib.mkOption {
+                type = lib.types.nullOr (ref "server");
+                default = null;
+              };
+              options.dst-server = lib.mkOption {
+                type = lib.types.nullOr (ref "server");
+                default = null;
+              };
               options.protocol = lib.mkOption { type = lib.types.str; };
               options.port = lib.mkOption { type = lib.types.int; };
               options.action = lib.mkOption { type = lib.types.str; };
@@ -233,8 +331,14 @@ let
               options.domains = lib.mkOption { type = lib.types.listOf lib.types.str; };
               options.issuer = lib.mkOption { type = lib.types.str; };
               options.expires-days = lib.mkOption { type = lib.types.int; };
-              options.server = lib.mkOption { type = lib.types.nullOr (ref "server"); default = null; };
-              options.loadbalancer = lib.mkOption { type = lib.types.nullOr (ref "loadbalancer"); default = null; };
+              options.server = lib.mkOption {
+                type = lib.types.nullOr (ref "server");
+                default = null;
+              };
+              options.loadbalancer = lib.mkOption {
+                type = lib.types.nullOr (ref "loadbalancer");
+                default = null;
+              };
               validators = [ validators.cert-has-target ];
             };
 
@@ -262,8 +366,14 @@ let
               options.shell = lib.mkOption { type = lib.types.str; };
               options.ssh-key = lib.mkOption { type = lib.types.str; };
               options.ldap-role = lib.mkOption { type = ref "ldap-role"; };
-              options.servers = lib.mkOption { type = setOf (ref "server"); default = []; };
-              options.manager = lib.mkOption { type = lib.types.nullOr (ref "user"); default = null; };
+              options.servers = lib.mkOption {
+                type = setOf (ref "server");
+                default = [ ];
+              };
+              options.manager = lib.mkOption {
+                type = lib.types.nullOr (ref "user");
+                default = null;
+              };
             };
 
             # Policy
@@ -387,27 +497,29 @@ let
             };
 
             # ── Fleet data (config values) ──
-            config.datacenters = fleet.datacenter or {};
-            config.environments = fleet.environment or {};
-            config.networks = fleet.network or {};
-            config.subnets = fleet.subnet or {};
-            config.vlans = lib.mapAttrs (_: v: builtins.removeAttrs v [ "name" ] // { vlan-name = v.name; }) (fleet.vlan or {});
-            config.servers = fleet.server or {};
-            config.interfaces = fleet.interface or {};
-            config.services = fleet.service or {};
-            config.ports = fleet.port or {};
-            config.service-dependencies = fleet.service-dependency or {};
-            config.domains = fleet.domain or {};
-            config.dns-records = fleet.dns-record or {};
-            config.loadbalancers = fleet.loadbalancer or {};
-            config.backends = fleet.backend or {};
-            config.firewall-rules = fleet.firewall-rule or {};
-            config.certificates = fleet.certificate or {};
-            config.schedules = fleet.schedule or {};
-            config.ldap-groups = fleet.ldap-group or {};
-            config.ldap-roles = fleet.ldap-role or {};
-            config.users = fleet.user or {};
-            config.access-policies = fleet.access-policy or {};
+            config.datacenters = fleet.datacenter or { };
+            config.environments = fleet.environment or { };
+            config.networks = fleet.network or { };
+            config.subnets = fleet.subnet or { };
+            config.vlans = lib.mapAttrs (_: v: builtins.removeAttrs v [ "name" ] // { vlan-name = v.name; }) (
+              fleet.vlan or { }
+            );
+            config.servers = fleet.server or { };
+            config.interfaces = fleet.interface or { };
+            config.services = fleet.service or { };
+            config.ports = fleet.port or { };
+            config.service-dependencies = fleet.service-dependency or { };
+            config.domains = fleet.domain or { };
+            config.dns-records = fleet.dns-record or { };
+            config.loadbalancers = fleet.loadbalancer or { };
+            config.backends = fleet.backend or { };
+            config.firewall-rules = fleet.firewall-rule or { };
+            config.certificates = fleet.certificate or { };
+            config.schedules = fleet.schedule or { };
+            config.ldap-groups = fleet.ldap-group or { };
+            config.ldap-roles = fleet.ldap-role or { };
+            config.users = fleet.user or { };
+            config.access-policies = fleet.access-policy or { };
           }
         ];
       };

@@ -203,7 +203,7 @@ Fleet data (52 instances across 21 kinds)
   → SQL queries run against the built configs
 ```
 
----
+______________________________________________________________________
 
 ## How to Build Your Own Schema
 
@@ -270,6 +270,7 @@ in
 ```
 
 **Key concepts:**
+
 - `mkSchemaOption {}` declares the schema container
 - `config.schema.<kind>` defines a kind with `options.*` for fields
 - `parent = "kind"` creates parent-child topology (P-edges)
@@ -475,6 +476,7 @@ ddl.views    # [ "CREATE VIEW user_permissions AS ..." ... ]
 ```
 
 **What it generates:**
+
 - `CREATE TABLE` with column types, `NOT NULL`, `PRIMARY KEY`, `DEFAULT`, `REFERENCES`
 - `CHECK` constraints from enum refinements (e.g., `CHECK (tier IN ('dev', 'staging', 'prod'))`)
 - Junction tables for `setOf` refs (e.g., `user_server(user_, server)`)
@@ -658,7 +660,7 @@ hostConfigs.api-1.security.acme.acceptTerms     # → false (no port 443)
 
 **NixOS delivery:** `nixos` can be a plain attrset (static) or a function `{ fleet, serverName, server } → attrset` (dynamic). The engine deep-merges the base module (from `buildServerModule`) with all matching rule modules in declaration order via `lib.recursiveUpdate`.
 
----
+______________________________________________________________________
 
 ## Data Model
 

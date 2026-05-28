@@ -25,8 +25,14 @@
 let
   baseNodes = engine.buildNodes {
     parentGraph = engine.star "root" [
-      "Point2D" "Point3D" "Color" "Named" "NamedPoint"
-      "Shape" "Circle" "Rect"
+      "Point2D"
+      "Point3D"
+      "Color"
+      "Named"
+      "NamedPoint"
+      "Shape"
+      "Circle"
+      "Rect"
       "env"
     ];
     edgeGraphs = {
@@ -40,35 +46,70 @@ let
     };
     decls = {
       root = { };
-      "Point2D" = { x = "Num"; y = "Num"; };
-      "Point3D" = { x = "Num"; y = "Num"; z = "Num"; };
-      Color = { r = "Num"; g = "Num"; b = "Num"; };
-      Named = { name = "String"; };
-      NamedPoint = { name = "String"; };
-      Shape = { area = "() -> Num"; };
-      Circle = { radius = "Num"; };
-      Rect = { width = "Num"; height = "Num"; };
+      "Point2D" = {
+        x = "Num";
+        y = "Num";
+      };
+      "Point3D" = {
+        x = "Num";
+        y = "Num";
+        z = "Num";
+      };
+      Color = {
+        r = "Num";
+        g = "Num";
+        b = "Num";
+      };
+      Named = {
+        name = "String";
+      };
+      NamedPoint = {
+        name = "String";
+      };
+      Shape = {
+        area = "() -> Num";
+      };
+      Circle = {
+        radius = "Num";
+      };
+      Rect = {
+        width = "Num";
+        height = "Num";
+      };
       env = { };
     };
     types = {
       root = "root";
-      "Point2D" = "record"; "Point3D" = "record"; Color = "record";
-      Named = "record"; NamedPoint = "record";
-      Shape = "class"; Circle = "class"; Rect = "class";
+      "Point2D" = "record";
+      "Point3D" = "record";
+      Color = "record";
+      Named = "record";
+      NamedPoint = "record";
+      Shape = "class";
+      Circle = "class";
+      Rect = "class";
       env = "env";
     };
     relations = {
       root = {
         typeDecl = {
-          "Point2D" = "record"; "Point3D" = "record"; Color = "record";
-          Named = "record"; NamedPoint = "record";
-          Shape = "class"; Circle = "class"; Rect = "class";
-          Num = "primitive"; Bool = "primitive"; String = "primitive";
+          "Point2D" = "record";
+          "Point3D" = "record";
+          Color = "record";
+          Named = "record";
+          NamedPoint = "record";
+          Shape = "class";
+          Circle = "class";
+          Rect = "class";
+          Num = "primitive";
+          Bool = "primitive";
+          String = "primitive";
         };
       };
       env = {
         bindings = {
-          origin = "Point2D"; p3 = "Point3D";
+          origin = "Point2D";
+          p3 = "Point3D";
           distance = "(Point2D, Point2D) -> Num";
         };
       };
@@ -80,10 +121,15 @@ let
     "Pair<Num,String>" = {
       id = "Pair<Num,String>";
       parent = "root";
-      decls = { fst = "Num"; snd = "String"; };
-      imports = [ ]; childrenIds = [ ];
+      decls = {
+        fst = "Num";
+        snd = "String";
+      };
+      imports = [ ];
+      childrenIds = [ ];
       type = "record";
-      edgesByLabel = { }; rels = { };
+      edgesByLabel = { };
+      rels = { };
     };
   };
 in

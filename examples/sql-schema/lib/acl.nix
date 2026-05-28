@@ -6,27 +6,28 @@
 #   transitive: gen-graph reachableFrom to walk dependency graph
 { lib }:
 let
-  synthesizeAccess = rawFleet:
+  synthesizeAccess =
+    rawFleet:
     let
-      users = rawFleet.user or {};
-      policies = rawFleet.access-policy or {};
-      services = rawFleet.service or {};
-      backends = rawFleet.backend or {};
+      users = rawFleet.user or { };
+      policies = rawFleet.access-policy or { };
+      services = rawFleet.service or { };
+      backends = rawFleet.backend or { };
 
       # For each user, find matching policies and resolve targets
-      userEntries = builtins.concatMap (userName:
+      userEntries = builtins.concatMap (
+        userName:
         let
           user = users.${userName};
           userRole = user.ldap-role;
-          userServers = user.servers or [];
+          userServers = user.servers or [ ];
 
           # Policies matching this user's role
-          matchingPolicies = lib.filterAttrs (_: p:
-            p.ldap-role == userRole
-          ) policies;
+          matchingPolicies = lib.filterAttrs (_: p: p.ldap-role == userRole) policies;
 
           # Resolve targets for a policy
-          policyEntries = lib.concatMap (policyName:
+          policyEntries = lib.concatMap (
+            policyName:
             let
               policy = matchingPolicies.${policyName};
               targets =
@@ -50,44 +51,45 @@ let
       ) (builtins.attrNames users);
 
       # Direct scope: user's assigned servers, or services/LBs on those servers
-      directTargets = policy: serverList:
+      directTargets =
+        policy: serverList:
         if policy.resource-kind == "server" then
           map (s: "server:${s}") serverList
         else if policy.resource-kind == "service" then
           # Services running on user's assigned servers
           let
             serverSet = serverList;
-            matchingServices = lib.filterAttrs (_: svc:
-              builtins.elem (svc.server or "") serverSet
-            ) services;
+            matchingServices = lib.filterAttrs (_: svc: builtins.elem (svc.server or "") serverSet) services;
           in
           map (s: "service:${s}") (builtins.attrNames matchingServices)
         else if policy.resource-kind == "loadbalancer" then
           # LBs fronting services on user's assigned servers
           let
-            serverServices = builtins.filter (svcName:
-              builtins.elem (services.${svcName}.server or "") serverList
+            serverServices = builtins.filter (
+              svcName: builtins.elem (services.${svcName}.server or "") serverList
             ) (builtins.attrNames services);
-            matchingBackends = lib.filterAttrs (_: b:
-              builtins.elem (b.service or "") serverServices
-            ) backends;
+            matchingBackends = lib.filterAttrs (_: b: builtins.elem (b.service or "") serverServices) backends;
             lbNames = lib.unique (map (b: b.loadbalancer or "") (builtins.attrValues matchingBackends));
           in
           map (lb: "loadbalancer:${lb}") (builtins.filter (n: n != "") lbNames)
-        else [];
+        else
+          [ ];
 
       # Transitive scope: walk from user's servers through service dependencies
-      transitiveTargets = policy: serverList:
+      transitiveTargets =
+        policy: serverList:
         if policy.resource-kind == "service" then
           # Services on assigned servers + services reachable via dependencies
           let
-            onServerServices = builtins.filter (svcName:
-              builtins.elem (services.${svcName}.server or "") serverList
+            onServerServices = builtins.filter (
+              svcName: builtins.elem (services.${svcName}.server or "") serverList
             ) (builtins.attrNames services);
             # Walk service dependencies
-            deps = rawFleet.service-dependency or {};
-            walkDeps = visited: queue:
-              if queue == [] then visited
+            deps = rawFleet.service-dependency or { };
+            walkDeps =
+              visited: queue:
+              if queue == [ ] then
+                visited
               else
                 let
                   current = builtins.head queue;
@@ -109,11 +111,11 @@ let
         else if policy.resource-kind == "loadbalancer" then
           # LBs reachable from assigned servers' services
           let
-            onServerServices = builtins.filter (svcName:
-              builtins.elem (services.${svcName}.server or "") serverList
+            onServerServices = builtins.filter (
+              svcName: builtins.elem (services.${svcName}.server or "") serverList
             ) (builtins.attrNames services);
-            matchingBackends = lib.filterAttrs (_: b:
-              builtins.elem (b.service or "") onServerServices
+            matchingBackends = lib.filterAttrs (
+              _: b: builtins.elem (b.service or "") onServerServices
             ) backends;
             lbNames = lib.unique (map (b: b.loadbalancer or "") (builtins.attrValues matchingBackends));
           in

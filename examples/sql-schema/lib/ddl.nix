@@ -5,73 +5,107 @@
 { lib, schemaLib }:
 let
   # SQL reserved words that need escaping
-  reservedWords = [ "user" "primary" "group" "order" "table" "index" "type" "name" ];
+  reservedWords = [
+    "user"
+    "primary"
+    "group"
+    "order"
+    "table"
+    "index"
+    "type"
+    "name"
+  ];
 
   # Escape identifier: hyphen → underscore, reserved words → suffixed with _
-  escapeIdent = name:
+  escapeIdent =
+    name:
     let
       underscored = builtins.replaceStrings [ "-" ] [ "_" ] name;
     in
-    if builtins.elem underscored reservedWords then "${underscored}_"
-    else underscored;
+    if builtins.elem underscored reservedWords then "${underscored}_" else underscored;
 
   # Map Nix option types to SQL types
-  nixTypeToSql = optType:
-    let typeName = optType.name or "unknown";
+  nixTypeToSql =
+    optType:
+    let
+      typeName = optType.name or "unknown";
     in
-    if typeName == "str" then "text"
-    else if typeName == "int" then "int"
-    else if typeName == "bool" then "boolean"
-    else if lib.hasPrefix "listOf" typeName then "text[]"
-    else if lib.hasPrefix "nullOr" typeName then nixTypeToSql ((optType.nestedTypes or {}).elemType or { name = "text"; })
-    else if lib.hasPrefix "ref" typeName then "text"
-    else if lib.hasPrefix "setOf" typeName then null  # junction table instead
-    else "text";
+    if typeName == "str" then
+      "text"
+    else if typeName == "int" then
+      "int"
+    else if typeName == "bool" then
+      "boolean"
+    else if lib.hasPrefix "listOf" typeName then
+      "text[]"
+    else if lib.hasPrefix "nullOr" typeName then
+      nixTypeToSql ((optType.nestedTypes or { }).elemType or { name = "text"; })
+    else if lib.hasPrefix "ref" typeName then
+      "text"
+    else if lib.hasPrefix "setOf" typeName then
+      null # junction table instead
+    else
+      "text";
 
   # Check if an option type is nullable (nullOr)
-  isNullable = optType:
-    let typeName = optType.name or ""; in
+  isNullable =
+    optType:
+    let
+      typeName = optType.name or "";
+    in
     lib.hasPrefix "nullOr" typeName;
 
   # Check if an option type is a setOf (produces junction table)
-  isSetOf = optType:
-    optType.isSetOf or false;
+  isSetOf = optType: optType.isSetOf or false;
 
   # Determine if a ref field produces a junction table
-  isJunctionRef = optType:
-    isSetOf optType || (lib.hasPrefix "setOf" (optType.name or ""));
+  isJunctionRef = optType: isSetOf optType || (lib.hasPrefix "setOf" (optType.name or ""));
 
   # Generate CHECK constraints from enum refinements
-  mkCheckConstraint = fieldName: refinementList:
+  mkCheckConstraint =
+    fieldName: refinementList:
     let
-      enumChecks = builtins.filter (r:
-        let msg = r.message or ""; in
+      enumChecks = builtins.filter (
+        r:
+        let
+          msg = r.message or "";
+        in
         lib.hasPrefix "must be " msg && builtins.match ".*,.*" msg != null
       ) refinementList;
-      rangeChecks = builtins.filter (r:
-        let msg = r.message or ""; in
+      rangeChecks = builtins.filter (
+        r:
+        let
+          msg = r.message or "";
+        in
         lib.hasPrefix "must be positive" msg
         || lib.hasPrefix "must be a valid TCP" msg
         || lib.hasPrefix "VLAN ID" msg
       ) refinementList;
     in
     # For known enum refinements, produce CHECK constraints
-    lib.optionals (enumChecks != []) (map (_:
-      "CHECK (${escapeIdent fieldName} IN (/* see schema */))"
-    ) enumChecks)
-    ++ lib.optionals (rangeChecks != []) (map (r:
-      let msg = r.message or ""; in
-      if lib.hasPrefix "must be positive" msg then
-        "CHECK (${escapeIdent fieldName} > 0)"
-      else if lib.hasPrefix "must be a valid TCP" msg then
-        "CHECK (${escapeIdent fieldName} >= 1 AND ${escapeIdent fieldName} <= 65535)"
-      else if lib.hasPrefix "VLAN ID" msg then
-        "CHECK (${escapeIdent fieldName} >= 1 AND ${escapeIdent fieldName} <= 4094)"
-      else ""
-    ) rangeChecks);
+    lib.optionals (enumChecks != [ ]) (
+      map (_: "CHECK (${escapeIdent fieldName} IN (/* see schema */))") enumChecks
+    )
+    ++ lib.optionals (rangeChecks != [ ]) (
+      map (
+        r:
+        let
+          msg = r.message or "";
+        in
+        if lib.hasPrefix "must be positive" msg then
+          "CHECK (${escapeIdent fieldName} > 0)"
+        else if lib.hasPrefix "must be a valid TCP" msg then
+          "CHECK (${escapeIdent fieldName} >= 1 AND ${escapeIdent fieldName} <= 65535)"
+        else if lib.hasPrefix "VLAN ID" msg then
+          "CHECK (${escapeIdent fieldName} >= 1 AND ${escapeIdent fieldName} <= 4094)"
+        else
+          ""
+      ) rangeChecks
+    );
 
   # Generate a CREATE TABLE statement for one kind
-  generateTable = schema: kindName:
+  generateTable =
+    schema: kindName:
     let
       meta = schema._meta;
       kindMeta = meta.kindMeta kindName;
@@ -79,12 +113,19 @@ let
       tableName = escapeIdent kindName;
 
       # Option names minus internal ones
-      optNames = builtins.filter (n:
-        !(builtins.elem n [ "name" "nodeId" "id_hash" "_module" ])
+      optNames = builtins.filter (
+        n:
+        !(builtins.elem n [
+          "name"
+          "nodeId"
+          "id_hash"
+          "_module"
+        ])
       ) kindMeta.optionNames;
 
       # Build column definitions
-      columns = builtins.concatMap (optName:
+      columns = builtins.concatMap (
+        optName:
         let
           opt = kindMeta.options.${optName};
           optType = opt.type or { name = "text"; };
@@ -95,89 +136,107 @@ let
           refTarget = if isRef then escapeIdent refs.${optName} else null;
         in
         # Skip setOf fields (they become junction tables)
-        if sqlType == null || isJunctionRef optType then []
-        else [{
-          col = colName;
-          sqlType = sqlType;
-          constraints =
-            lib.optional (!nullable) "NOT NULL"
-            ++ lib.optional isRef "REFERENCES ${refTarget}(name_)";
-        }]
+        if sqlType == null || isJunctionRef optType then
+          [ ]
+        else
+          [
+            {
+              col = colName;
+              sqlType = sqlType;
+              constraints =
+                lib.optional (!nullable) "NOT NULL" ++ lib.optional isRef "REFERENCES ${refTarget}(name_)";
+            }
+          ]
       ) optNames;
 
       # Junction tables for setOf refs
-      junctionTables = builtins.concatMap (optName:
+      junctionTables = builtins.concatMap (
+        optName:
         let
           opt = kindMeta.options.${optName};
           optType = opt.type or { name = "text"; };
         in
-        if isJunctionRef optType && refs ? ${optName} then [{
-          tableName = "${tableName}_${escapeIdent optName}";
-          leftCol = tableName;
-          rightCol = escapeIdent refs.${optName};
-          leftRef = tableName;
-          rightRef = escapeIdent refs.${optName};
-        }]
-        else []
+        if isJunctionRef optType && refs ? ${optName} then
+          [
+            {
+              tableName = "${tableName}_${escapeIdent optName}";
+              leftCol = tableName;
+              rightCol = escapeIdent refs.${optName};
+              leftRef = tableName;
+              rightRef = escapeIdent refs.${optName};
+            }
+          ]
+        else
+          [ ]
       ) optNames;
 
       # Render column lines
       columnLines = [
         "  name_ text PRIMARY KEY NOT NULL"
-      ] ++ map (c:
-        "  ${c.col} ${c.sqlType}${if c.constraints != [] then " " + builtins.concatStringsSep " " c.constraints else ""}"
+      ]
+      ++ map (
+        c:
+        "  ${c.col} ${c.sqlType}${
+            if c.constraints != [ ] then " " + builtins.concatStringsSep " " c.constraints else ""
+          }"
       ) columns;
 
       tableStmt = ''
-CREATE TABLE ${tableName} (
-${builtins.concatStringsSep ",\n" columnLines}
-);'';
+        CREATE TABLE ${tableName} (
+        ${builtins.concatStringsSep ",\n" columnLines}
+        );'';
 
       junctionStmts = map (jt: ''
-CREATE TABLE ${jt.tableName} (
-  ${jt.leftCol} text NOT NULL REFERENCES ${jt.leftRef}(name_),
-  ${jt.rightCol} text NOT NULL REFERENCES ${jt.rightRef}(name_),
-  PRIMARY KEY (${jt.leftCol}, ${jt.rightCol})
-);'') junctionTables;
+        CREATE TABLE ${jt.tableName} (
+          ${jt.leftCol} text NOT NULL REFERENCES ${jt.leftRef}(name_),
+          ${jt.rightCol} text NOT NULL REFERENCES ${jt.rightRef}(name_),
+          PRIMARY KEY (${jt.leftCol}, ${jt.rightCol})
+        );'') junctionTables;
     in
     [ tableStmt ] ++ junctionStmts;
 
   # Generate indexes for FK columns
-  generateIndexes = schema: kindName:
+  generateIndexes =
+    schema: kindName:
     let
       meta = schema._meta;
       kindMeta = meta.kindMeta kindName;
       refs = kindMeta.refs;
       tableName = escapeIdent kindName;
     in
-    lib.mapAttrsToList (field: _target:
-      let colName = escapeIdent field;
-      in "CREATE INDEX idx_${tableName}_${colName} ON ${tableName}(${colName});"
+    lib.mapAttrsToList (
+      field: _target:
+      let
+        colName = escapeIdent field;
+      in
+      "CREATE INDEX idx_${tableName}_${colName} ON ${tableName}(${colName});"
     ) refs;
 
   # Generate views for synthesized kinds
   generateViews = _schema: [
     ''
-CREATE VIEW user_permissions AS
-  SELECT name_ AS username, resource, actions, via
-  FROM effective_access;''
+      CREATE VIEW user_permissions AS
+        SELECT name_ AS username, resource, actions, via
+        FROM effective_access;''
     ''
-CREATE VIEW server_network_map AS
-  SELECT s.name_ AS server, i.ip, i.mac, v.name_ AS vlan, sub.cidr AS subnet
-  FROM server s
-  JOIN interface i ON i.server = s.name_ AND i.primary_ = true
-  JOIN vlan v ON i.vlan = v.name_
-  JOIN subnet sub ON v.subnet = sub.name_;''
+      CREATE VIEW server_network_map AS
+        SELECT s.name_ AS server, i.ip, i.mac, v.name_ AS vlan, sub.cidr AS subnet
+        FROM server s
+        JOIN interface i ON i.server = s.name_ AND i.primary_ = true
+        JOIN vlan v ON i.vlan = v.name_
+        JOIN subnet sub ON v.subnet = sub.name_;''
   ];
 
   # Topological sort for migration ordering (roots first)
-  migrationOrder = schema:
+  migrationOrder =
+    schema:
     let
       meta = schema._meta;
       kindNames = meta.kindNames;
 
       # Build dependency map: kind → [kinds it depends on via refs and parent]
-      deps = lib.genAttrs kindNames (k:
+      deps = lib.genAttrs kindNames (
+        k:
         let
           refTargets = builtins.attrValues (meta.kindMeta k).refs;
           parentDep = meta.topology.${k}.parent;
@@ -189,25 +248,28 @@ CREATE VIEW server_network_map AS
       );
 
       # Kahn's algorithm
-      go = ordered: remaining:
-        if remaining == [] then ordered
+      go =
+        ordered: remaining:
+        if remaining == [ ] then
+          ordered
         else
           let
             # Find kinds with all dependencies satisfied
-            ready = builtins.filter (k:
-              builtins.all (dep: builtins.elem dep ordered) deps.${k}
-            ) remaining;
+            ready = builtins.filter (k: builtins.all (dep: builtins.elem dep ordered) deps.${k}) remaining;
           in
-          if ready == [] then
+          if ready == [ ] then
             # Remaining kinds have circular deps — emit them anyway
             ordered ++ (builtins.sort builtins.lessThan remaining)
           else
-            go (ordered ++ builtins.sort builtins.lessThan ready) (builtins.filter (k: !(builtins.elem k ready)) remaining);
+            go (ordered ++ builtins.sort builtins.lessThan ready) (
+              builtins.filter (k: !(builtins.elem k ready)) remaining
+            );
     in
-    go [] kindNames;
+    go [ ] kindNames;
 
   # Generate full DDL in migration order
-  generateDDL = schema:
+  generateDDL =
+    schema:
     let
       order = migrationOrder schema;
       tables = builtins.concatMap (k: generateTable schema k) order;
@@ -215,11 +277,23 @@ CREATE VIEW server_network_map AS
       views = generateViews schema;
     in
     {
-      inherit tables indexes views order;
+      inherit
+        tables
+        indexes
+        views
+        order
+        ;
       full = builtins.concatStringsSep "\n\n" (tables ++ [ "" ] ++ indexes ++ [ "" ] ++ views);
     };
 
 in
 {
-  inherit generateDDL generateTable generateIndexes generateViews migrationOrder escapeIdent;
+  inherit
+    generateDDL
+    generateTable
+    generateIndexes
+    generateViews
+    migrationOrder
+    escapeIdent
+    ;
 }

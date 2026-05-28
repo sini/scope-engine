@@ -315,7 +315,22 @@ Fixed-point iteration (Sloane 2010 §2.2). `f` receives `self`, `id`, and previo
 collectionAttr { traverse; extract; combine ? a: b: a ++ b; filter ? _: true; } self id
 ```
 
-Traverse modes: `"imports"`, `"children"`, `"siblings"`, `"ancestors"`, `"label:<name>"`, or custom function.
+Traverse modes: `"imports"`, `"children"`, `"siblings"`, `"ancestors"`, `"neron"`, `"label:<name>"`, or custom function.
+
+**`"neron"` traverse mode** — Specificity-ordered collection following D > I > P (declaration, import, parent) priority. Unlike `query`, which returns a single shadowed result, `"neron"` returns all contributions from reachable scopes in specificity order, suitable for fold-based composition (e.g., collecting all modules, merging config fragments).
+
+Properties: cycle-safe via seen-set tracking, diamond-safe deduplication (each scope visited at most once), recursive parent resolution. Traversal order: self, then unseen imports, then parent — mirroring the Neron (2015) resolution calculus but collecting rather than shadowing.
+
+```nix
+# Collect all config fragments from local scope, imports, and ancestors
+config-modules = engine.collectionAttr {
+  traverse = "neron";
+  extract = self: id:
+    let n = self.node id; in
+    n.decls.modules or null;
+  combine = a: b: a ++ b;
+};
+```
 
 #### `query`
 
@@ -394,7 +409,7 @@ just ci eval         # run eval suite
 just ci eval.test-basic-root-attribute  # specific test
 ```
 
-Requires nix-unit. 120+ tests across 10 suites.
+Requires nix-unit. 152 tests across 10 suites.
 
 ## Theoretical Foundations
 

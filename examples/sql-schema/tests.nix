@@ -18,7 +18,12 @@ in
     };
     test-fleet-has-servers = {
       expr = builtins.sort builtins.lessThan (builtins.attrNames sql.rawFleet.server);
-      expected = [ "api-1" "db-1" "web-1" "web-2" ];
+      expected = [
+        "api-1"
+        "db-1"
+        "web-1"
+        "web-2"
+      ];
     };
   };
 
@@ -114,12 +119,21 @@ in
 
     test-server-ref-fields = {
       expr = builtins.sort builtins.lessThan (builtins.attrNames (meta.kindMeta "server").refs);
-      expected = [ "datacenter" "environment" "replaces" "subnet" ];
+      expected = [
+        "datacenter"
+        "environment"
+        "replaces"
+        "subnet"
+      ];
     };
 
     test-user-ref-fields = {
       expr = builtins.sort builtins.lessThan (builtins.attrNames (meta.kindMeta "user").refs);
-      expected = [ "ldap-role" "manager" "servers" ];
+      expected = [
+        "ldap-role"
+        "manager"
+        "servers"
+      ];
     };
   };
 
@@ -201,7 +215,10 @@ in
 
     test-user-servers-resolved = {
       expr = map (s: s.hostname) fleet.user.alice.servers;
-      expected = [ "web-1" "db-1" ];
+      expected = [
+        "web-1"
+        "db-1"
+      ];
     };
 
     test-user-manager-self-ref = {
@@ -254,7 +271,14 @@ in
     test-invalid-cidr-fails = {
       expr =
         let
-          badFleet = sql.rawFleet // { network = { bad = { cidr = "not-cidr"; datacenter = "us-east-1"; }; }; };
+          badFleet = sql.rawFleet // {
+            network = {
+              bad = {
+                cidr = "not-cidr";
+                datacenter = "us-east-1";
+              };
+            };
+          };
           result = builtins.tryEval (builtins.deepSeq (sql.evalSchema badFleet).fleet.network { });
         in
         result.success;
@@ -269,7 +293,13 @@ in
     test-invalid-env-tier-fails = {
       expr =
         let
-          badFleet = sql.rawFleet // { environment = { bad = { tier = "invalid"; }; }; };
+          badFleet = sql.rawFleet // {
+            environment = {
+              bad = {
+                tier = "invalid";
+              };
+            };
+          };
           result = builtins.tryEval (builtins.deepSeq (sql.evalSchema badFleet).fleet.environment { });
         in
         result.success;
@@ -308,7 +338,11 @@ in
       # Self-referential kinds (server.replaces, user.manager, lb.failover)
       # create kind-level cycles; instance-level graph is acyclic
       expr = builtins.sort builtins.lessThan sql.kindCycles;
-      expected = [ "loadbalancer" "server" "user" ];
+      expected = [
+        "loadbalancer"
+        "server"
+        "user"
+      ];
     };
 
     test-instance-node-count = {
@@ -323,7 +357,7 @@ in
 
     test-instance-no-cycles = {
       expr = graphLib.cycles sql.instanceNodes;
-      expected = [];
+      expected = [ ];
     };
 
     test-reachable-from-server = {
@@ -344,8 +378,7 @@ in
         let
           deps = sql.dependents "datacenter:us-east-1";
         in
-        builtins.elem "server:web-1" deps
-        && builtins.elem "network:us-east-1.primary" deps;
+        builtins.elem "server:web-1" deps && builtins.elem "network:us-east-1.primary" deps;
       expected = true;
     };
 
@@ -355,7 +388,12 @@ in
           serverNodes = graphLib.select sql.instanceNodes (n: n.type == "server");
         in
         builtins.sort builtins.lessThan (builtins.attrNames serverNodes);
-      expected = [ "server:api-1" "server:db-1" "server:web-1" "server:web-2" ];
+      expected = [
+        "server:api-1"
+        "server:db-1"
+        "server:web-1"
+        "server:web-2"
+      ];
     };
 
     test-service-dependency-chain = {
@@ -376,35 +414,57 @@ in
     {
       test-simple-select = {
         expr =
-          let ast = parseSql "SELECT hostname FROM servers";
-          in {
+          let
+            ast = parseSql "SELECT hostname FROM servers";
+          in
+          {
             cols = ast.select;
             kind = ast.from.kind;
           };
         expected = {
-          cols = [ { column = "hostname"; table = null; } ];
+          cols = [
+            {
+              column = "hostname";
+              table = null;
+            }
+          ];
           kind = "servers";
         };
       };
 
       test-select-star = {
         expr =
-          let ast = parseSql "SELECT * FROM servers";
-          in ast.select;
-        expected = [ { column = "*"; table = null; } ];
+          let
+            ast = parseSql "SELECT * FROM servers";
+          in
+          ast.select;
+        expected = [
+          {
+            column = "*";
+            table = null;
+          }
+        ];
       };
 
       test-select-with-alias = {
         expr =
-          let ast = parseSql "SELECT s.hostname, s.os FROM servers s";
-          in {
+          let
+            ast = parseSql "SELECT s.hostname, s.os FROM servers s";
+          in
+          {
             cols = ast.select;
             alias = ast.from.alias;
           };
         expected = {
           cols = [
-            { table = "s"; column = "hostname"; }
-            { table = "s"; column = "os"; }
+            {
+              table = "s";
+              column = "hostname";
+            }
+            {
+              table = "s";
+              column = "os";
+            }
           ];
           alias = "s";
         };
@@ -412,16 +472,20 @@ in
 
       test-single-join = {
         expr =
-          let ast = parseSql "SELECT s.hostname FROM servers s JOIN services svc ON svc.server = s.name";
-          in builtins.length ast.joins;
+          let
+            ast = parseSql "SELECT s.hostname FROM servers s JOIN services svc ON svc.server = s.name";
+          in
+          builtins.length ast.joins;
         expected = 1;
       };
 
       test-join-details = {
         expr =
-          let ast = parseSql "SELECT s.hostname FROM servers s JOIN services svc ON svc.server = s.name";
-              j = builtins.head ast.joins;
-          in {
+          let
+            ast = parseSql "SELECT s.hostname FROM servers s JOIN services svc ON svc.server = s.name";
+            j = builtins.head ast.joins;
+          in
+          {
             kind = j.kind;
             alias = j.alias;
             isLeft = j.isLeft;
@@ -432,105 +496,149 @@ in
           kind = "services";
           alias = "svc";
           isLeft = false;
-          onLeft = { table = "svc"; column = "server"; };
-          onRight = { table = "s"; column = "name"; };
+          onLeft = {
+            table = "svc";
+            column = "server";
+          };
+          onRight = {
+            table = "s";
+            column = "name";
+          };
         };
       };
 
       test-multi-join = {
         expr =
-          let ast = parseSql ''
-            SELECT s.hostname, svc.name, p.number
-            FROM servers s
-            JOIN services svc ON svc.server = s.name
-            JOIN ports p ON p.service = svc.name
-          '';
-          in builtins.length ast.joins;
+          let
+            ast = parseSql ''
+              SELECT s.hostname, svc.name, p.number
+              FROM servers s
+              JOIN services svc ON svc.server = s.name
+              JOIN ports p ON p.service = svc.name
+            '';
+          in
+          builtins.length ast.joins;
         expected = 2;
       };
 
       test-where-eq = {
         expr =
-          let ast = parseSql "SELECT hostname FROM servers WHERE datacenter = 'us-east-1'";
-          in ast.where;
+          let
+            ast = parseSql "SELECT hostname FROM servers WHERE datacenter = 'us-east-1'";
+          in
+          ast.where;
         expected = {
           op = "=";
-          left = { table = null; column = "datacenter"; };
+          left = {
+            table = null;
+            column = "datacenter";
+          };
           right = "us-east-1";
         };
       };
 
       test-where-and = {
         expr =
-          let ast = parseSql "SELECT hostname FROM servers WHERE datacenter = 'us-east-1' AND environment = 'prod'";
-          in ast.where.op;
+          let
+            ast = parseSql "SELECT hostname FROM servers WHERE datacenter = 'us-east-1' AND environment = 'prod'";
+          in
+          ast.where.op;
         expected = "AND";
       };
 
       test-where-in = {
         expr =
-          let ast = parseSql "SELECT hostname FROM servers WHERE datacenter IN ('us-east-1', 'eu-west-1')";
-          in ast.where;
+          let
+            ast = parseSql "SELECT hostname FROM servers WHERE datacenter IN ('us-east-1', 'eu-west-1')";
+          in
+          ast.where;
         expected = {
           op = "IN";
-          left = { table = null; column = "datacenter"; };
-          right = [ "us-east-1" "eu-west-1" ];
+          left = {
+            table = null;
+            column = "datacenter";
+          };
+          right = [
+            "us-east-1"
+            "eu-west-1"
+          ];
         };
       };
 
       test-where-is-null = {
         expr =
-          let ast = parseSql "SELECT hostname FROM servers WHERE replaces IS NULL";
-          in ast.where;
+          let
+            ast = parseSql "SELECT hostname FROM servers WHERE replaces IS NULL";
+          in
+          ast.where;
         expected = {
           op = "IS NULL";
-          left = { table = null; column = "replaces"; };
+          left = {
+            table = null;
+            column = "replaces";
+          };
         };
       };
 
       test-where-is-not-null = {
         expr =
-          let ast = parseSql "SELECT hostname FROM servers WHERE replaces IS NOT NULL";
-          in ast.where;
+          let
+            ast = parseSql "SELECT hostname FROM servers WHERE replaces IS NOT NULL";
+          in
+          ast.where;
         expected = {
           op = "IS NOT NULL";
-          left = { table = null; column = "replaces"; };
+          left = {
+            table = null;
+            column = "replaces";
+          };
         };
       };
 
       test-order-by = {
         expr =
-          let ast = parseSql "SELECT hostname FROM servers ORDER BY hostname";
-          in ast.orderBy;
-        expected = { table = null; column = "hostname"; };
+          let
+            ast = parseSql "SELECT hostname FROM servers ORDER BY hostname";
+          in
+          ast.orderBy;
+        expected = {
+          table = null;
+          column = "hostname";
+        };
       };
 
       test-limit = {
         expr =
-          let ast = parseSql "SELECT hostname FROM servers LIMIT 10";
-          in ast.limit;
+          let
+            ast = parseSql "SELECT hostname FROM servers LIMIT 10";
+          in
+          ast.limit;
         expected = 10;
       };
 
       test-left-join = {
         expr =
-          let ast = parseSql "SELECT s.hostname FROM servers s LEFT JOIN services svc ON svc.server = s.name";
-              j = builtins.head ast.joins;
-          in j.isLeft;
+          let
+            ast = parseSql "SELECT s.hostname FROM servers s LEFT JOIN services svc ON svc.server = s.name";
+            j = builtins.head ast.joins;
+          in
+          j.isLeft;
         expected = true;
       };
 
       test-full-query = {
         expr =
-          let ast = parseSql ''
-            SELECT s.hostname, s.cores
-            FROM servers s
-            JOIN services svc ON svc.server = s.name
-            WHERE s.datacenter = 'us-east-1'
-            ORDER BY s.hostname
-            LIMIT 5
-          '';
-          in {
+          let
+            ast = parseSql ''
+              SELECT s.hostname, s.cores
+              FROM servers s
+              JOIN services svc ON svc.server = s.name
+              WHERE s.datacenter = 'us-east-1'
+              ORDER BY s.hostname
+              LIMIT 5
+            '';
+          in
+          {
             selectCount = builtins.length ast.select;
             joinCount = builtins.length ast.joins;
             hasWhere = ast.where != null;
@@ -577,7 +685,11 @@ in
             rows = query "SELECT hostname FROM servers WHERE datacenter = 'us-east-1'";
           in
           builtins.sort builtins.lessThan (map (r: r.hostname) rows);
-        expected = [ "db-1" "web-1" "web-2" ];
+        expected = [
+          "db-1"
+          "web-1"
+          "web-2"
+        ];
       };
 
       test-where-inequality = {
@@ -599,7 +711,11 @@ in
             '';
           in
           builtins.sort builtins.lessThan (map (r: r.name) rows);
-        expected = [ "api" "nginx" "postgres" ];
+        expected = [
+          "api"
+          "nginx"
+          "postgres"
+        ];
       };
 
       test-where-with-join = {
@@ -613,7 +729,10 @@ in
             '';
           in
           builtins.sort builtins.lessThan (map (r: r.name) rows);
-        expected = [ "nginx" "postgres" ];
+        expected = [
+          "nginx"
+          "postgres"
+        ];
       };
 
       test-order-by = {
@@ -622,7 +741,12 @@ in
             rows = query "SELECT hostname FROM servers ORDER BY hostname";
           in
           map (r: r.hostname) rows;
-        expected = [ "api-1" "db-1" "web-1" "web-2" ];
+        expected = [
+          "api-1"
+          "db-1"
+          "web-1"
+          "web-2"
+        ];
       };
 
       test-limit = {
@@ -631,7 +755,10 @@ in
             rows = query "SELECT hostname FROM servers ORDER BY hostname LIMIT 2";
           in
           map (r: r.hostname) rows;
-        expected = [ "api-1" "db-1" ];
+        expected = [
+          "api-1"
+          "db-1"
+        ];
       };
 
       test-where-is-null = {
@@ -720,8 +847,7 @@ in
 
       test-junction-table-for-setof = {
         # user.servers is setOf → produces junction table
-        expr =
-          builtins.any (t: lib.hasInfix "user__servers" t || lib.hasInfix "user_servers" t) ddl.tables;
+        expr = builtins.any (t: lib.hasInfix "user__servers" t || lib.hasInfix "user_servers" t) ddl.tables;
         expected = true;
       };
 
@@ -761,7 +887,11 @@ in
 
       test-alice-server-actions = {
         expr = effectiveAccess."alice:server:web-1".actions;
-        expected = [ "sudo" "restart" "ssh" ];
+        expected = [
+          "sudo"
+          "restart"
+          "ssh"
+        ];
       };
 
       test-alice-has-db-access = {
@@ -778,7 +908,10 @@ in
 
       test-bob-server-actions = {
         expr = effectiveAccess."bob:server:api-1".actions;
-        expected = [ "logs" "ssh" ];
+        expected = [
+          "logs"
+          "ssh"
+        ];
       };
 
       test-alice-service-transitive = {
@@ -799,9 +932,7 @@ in
         # Filter effective access for sudo actions
         expr =
           let
-            sudoEntries = lib.filterAttrs (_: ea:
-              builtins.elem "sudo" ea.actions
-            ) effectiveAccess;
+            sudoEntries = lib.filterAttrs (_: ea: builtins.elem "sudo" ea.actions) effectiveAccess;
           in
           builtins.sort builtins.lessThan (lib.unique (lib.mapAttrsToList (_: ea: ea.user) sudoEntries));
         expected = [ "alice" ];
@@ -846,7 +977,10 @@ in
             key = "web-1:db-1";
           in
           networkReachability.${key}.path;
-        expected = [ "web-1" "db-1" ];
+        expected = [
+          "web-1"
+          "db-1"
+        ];
       };
     };
 
@@ -863,19 +997,22 @@ in
 
       test-web1-open-ports = {
         expr = builtins.sort builtins.lessThan configs.web-1.networking.firewall.allowedTCPPorts;
-        expected = [ 80 443 ];
+        expected = [
+          80
+          443
+        ];
       };
 
       test-db1-no-exposed-ports = {
         # postgres port has expose = false
         expr = configs.db-1.networking.firewall.allowedTCPPorts;
-        expected = [];
+        expected = [ ];
       };
 
       test-web2-no-services = {
         # web-2 has no services assigned
         expr = configs.web-2.networking.firewall.allowedTCPPorts;
-        expected = [];
+        expected = [ ];
       };
 
       test-api1-grpc-port = {
@@ -902,7 +1039,7 @@ in
 
       test-api1-bob-no-wheel = {
         # bob is developer, no sudo
-        expr = builtins.elem "wheel" (configs.api-1.users.users.bob.extraGroups or []);
+        expr = builtins.elem "wheel" (configs.api-1.users.users.bob.extraGroups or [ ]);
         expected = false;
       };
 
@@ -915,23 +1052,38 @@ in
 
       test-servers-with-sudo = {
         # alice is on web-1 and db-1 with sudo
-        expr = builtins.sort builtins.lessThan (builtins.attrNames (sql.nixosQueries.serversWithSudo configs));
-        expected = [ "db-1" "web-1" ];
+        expr = builtins.sort builtins.lessThan (
+          builtins.attrNames (sql.nixosQueries.serversWithSudo configs)
+        );
+        expected = [
+          "db-1"
+          "web-1"
+        ];
       };
 
       test-all-open-ports = {
         expr = sql.nixosQueries.allOpenPorts configs;
         expected = {
-          web-1 = [ 80 443 ];
-          web-2 = [];
-          db-1 = [];
+          web-1 = [
+            80
+            443
+          ];
+          web-2 = [ ];
+          db-1 = [ ];
           api-1 = [ 50051 ];
         };
       };
 
       test-servers-in-prod = {
-        expr = builtins.sort builtins.lessThan (builtins.attrNames (sql.nixosQueries.serversInEnv configs "prod"));
-        expected = [ "api-1" "db-1" "web-1" "web-2" ];
+        expr = builtins.sort builtins.lessThan (
+          builtins.attrNames (sql.nixosQueries.serversInEnv configs "prod")
+        );
+        expected = [
+          "api-1"
+          "db-1"
+          "web-1"
+          "web-2"
+        ];
       };
 
       # Cron jobs from schedules
@@ -949,54 +1101,77 @@ in
 
       # "Show me all servers where the firewall has port 443 open"
       test-where-firewall-has-443 = {
-        expr = builtins.attrNames (sql.nixosQueries.serversWhere configs
-          [ "networking" "firewall" "allowedTCPPorts" ]
-          (ports: builtins.elem 443 ports));
+        expr = builtins.attrNames (
+          sql.nixosQueries.serversWhere configs [ "networking" "firewall" "allowedTCPPorts" ] (
+            ports: builtins.elem 443 ports
+          )
+        );
         expected = [ "web-1" ];
       };
 
       # "Show me all servers where openssh is enabled"
       test-where-ssh-enabled = {
-        expr = builtins.sort builtins.lessThan
-          (builtins.attrNames (sql.nixosQueries.serversWhere configs
-            [ "services" "openssh" "enable" ]
-            (v: v == true)));
-        expected = [ "api-1" "db-1" "web-1" "web-2" ];
+        expr = builtins.sort builtins.lessThan (
+          builtins.attrNames (
+            sql.nixosQueries.serversWhere configs [ "services" "openssh" "enable" ] (v: v == true)
+          )
+        );
+        expected = [
+          "api-1"
+          "db-1"
+          "web-1"
+          "web-2"
+        ];
       };
 
       # "Show me servers that have cron jobs configured"
       test-where-has-cron-jobs = {
-        expr = builtins.sort builtins.lessThan
-          (builtins.attrNames (sql.nixosQueries.serversWhere configs
-            [ "services" "cron" "systemCronJobs" ]
-            (jobs: jobs != [])));
-        expected = [ "db-1" "web-1" ];
+        expr = builtins.sort builtins.lessThan (
+          builtins.attrNames (
+            sql.nixosQueries.serversWhere configs [ "services" "cron" "systemCronJobs" ] (jobs: jobs != [ ])
+          )
+        );
+        expected = [
+          "db-1"
+          "web-1"
+        ];
       };
 
       # "Show me servers where a specific user exists"
       test-where-user-alice-exists = {
-        expr = builtins.sort builtins.lessThan
-          (builtins.attrNames (sql.nixosQueries.serversWhere configs
-            [ "users" "users" ]
-            (users: users ? alice)));
-        expected = [ "db-1" "web-1" ];
+        expr = builtins.sort builtins.lessThan (
+          builtins.attrNames (
+            sql.nixosQueries.serversWhere configs [ "users" "users" ] (users: users ? alice)
+          )
+        );
+        expected = [
+          "db-1"
+          "web-1"
+        ];
       };
 
       # "Extract hostnames of servers that have any open ports"
       test-select-hostnames-with-open-ports = {
-        expr = sql.nixosQueries.selectFromConfigs configs
-          (cfg: cfg.networking.hostName)
-          (hostname: let
+        expr = sql.nixosQueries.selectFromConfigs configs (cfg: cfg.networking.hostName) (
+          hostname:
+          let
             cfg = configs.${hostname};
-          in cfg.networking.firewall.allowedTCPPorts != []);
-        expected = { web-1 = "web-1"; api-1 = "api-1"; };
+          in
+          cfg.networking.firewall.allowedTCPPorts != [ ]
+        );
+        expected = {
+          web-1 = "web-1";
+          api-1 = "api-1";
+        };
       };
 
       # "Which servers have the 'database' tag?"
       test-where-tagged-database = {
-        expr = builtins.attrNames (sql.nixosQueries.serversWhere configs
-          [ "environment" "etc" "server-tags" "text" ]
-          (tags: lib.hasInfix "database" tags));
+        expr = builtins.attrNames (
+          sql.nixosQueries.serversWhere configs [ "environment" "etc" "server-tags" "text" ] (
+            tags: lib.hasInfix "database" tags
+          )
+        );
         expected = [ "db-1" ];
       };
     };
@@ -1006,216 +1181,283 @@ in
   # evaluates SQL strings against it — querying the BUILT config,
   # not the input fleet data.
 
-  config-queries = let
-    qhc = sql.queryHostConfigs;
-  in {
-    # "Which hosts have nginx enabled?"
-    test-sql-nginx-hosts = {
-      expr = builtins.sort builtins.lessThan
-        (map (r: r.name) (qhc "SELECT name FROM hosts WHERE nginx_enabled = true"));
-      expected = [ "web-1" "web-2" ];  # both tagged "web"
-    };
-
-    # "Which hosts have postgresql enabled?"
-    test-sql-postgresql-hosts = {
-      expr = map (r: r.name) (qhc "SELECT name FROM hosts WHERE postgresql_enabled = true");
-      expected = [ "db-1" ];
-    };
-
-    # "Which hosts have sudo enabled?"
-    test-sql-sudo-hosts = {
-      expr = builtins.sort builtins.lessThan
-        (map (r: r.name) (qhc "SELECT name FROM hosts WHERE sudo_enabled = true"));
-      expected = [ "db-1" "web-1" ];
-    };
-
-    # "Which hosts have ACME certs?"
-    test-sql-acme-hosts = {
-      expr = map (r: r.name) (qhc "SELECT name FROM hosts WHERE acme_enabled = true");
-      expected = [ "web-1" ];
-    };
-
-    # "Show me hostnames and their open TCP ports for hosts with ports open"
-    # Use a Nix filter on the SQL result since list-emptiness isn't expressible in our SQL subset
-    test-sql-hostname-ports = {
-      expr = builtins.sort (a: b: a.hostname < b.hostname)
-        (builtins.filter (r: r.open_tcp_ports != [])
-          (qhc "SELECT hostname, open_tcp_ports FROM hosts"));
-      expected = [
-        { hostname = "api-1"; open_tcp_ports = [ 50051 ]; }
-        { hostname = "web-1"; open_tcp_ports = [ 80 443 ]; }
-      ];
-    };
-
-    # "Which hosts have users but no sudo?"
-    test-sql-users-no-sudo = {
-      expr = map (r: r.name)
-        (qhc "SELECT name FROM hosts WHERE user_count != 0 AND sudo_enabled = false");
-      expected = [ "api-1" ];  # bob is developer on api-1, no sudo
-    };
-
-    # "Hosts with monitoring enabled"
-    test-sql-monitoring = {
-      expr = builtins.length (qhc "SELECT name FROM hosts WHERE monitoring_enabled = true");
-      expected = 4;  # all servers are prod
-    };
-
-    # "Hosts with cron jobs"
-    test-sql-cron-hosts = {
-      expr = builtins.sort builtins.lessThan
-        (map (r: r.name) (qhc "SELECT name FROM hosts WHERE cron_job_count != 0"));
-      expected = [ "db-1" "web-1" ];
-    };
-
-    # ─── Comparison operators (>, >=, <, <=) ───
-
-    # "Servers with more than 4 cores"
-    test-sql-gt-cores = {
-      expr = map (r: r.hostname) (sql.query "SELECT hostname FROM servers WHERE cores > 4");
-      expected = [ "db-1" ];  # db-1 has 8 cores
-    };
-
-    # "Servers with at least 16GB RAM"
-    test-sql-gte-ram = {
-      expr = builtins.sort builtins.lessThan
-        (map (r: r.hostname) (sql.query "SELECT hostname FROM servers WHERE ram_gb >= 16"));
-      expected = [ "api-1" "db-1" ];  # api-1 has 16, db-1 has 32
-    };
-
-    # "Ports below 1024"
-    test-sql-lt-ports = {
-      expr = builtins.sort builtins.lessThan
-        (map (r: r.number) (sql.query "SELECT number FROM ports WHERE number < 1024"));
-      expected = [ 80 443 ];
-    };
-
-    # "Servers with 4 or fewer cores"
-    test-sql-lte-cores = {
-      expr = builtins.sort builtins.lessThan
-        (map (r: r.hostname) (sql.query "SELECT hostname FROM servers WHERE cores <= 4"));
-      expected = [ "api-1" "web-1" "web-2" ];
-    };
-
-    # Combined: "High-spec servers in us-east-1"
-    test-sql-gt-and = {
-      expr = map (r: r.hostname)
-        (sql.query "SELECT hostname FROM servers WHERE cores > 4 AND datacenter = 'us-east-1'");
-      expected = [ "db-1" ];
-    };
-
-    # ─── LIKE operator ───
-
-    # "Servers with hostnames starting with 'web'"
-    test-sql-like-prefix = {
-      expr = builtins.sort builtins.lessThan
-        (map (r: r.hostname) (sql.query "SELECT hostname FROM servers WHERE hostname LIKE 'web%'"));
-      expected = [ "web-1" "web-2" ];
-    };
-
-    # "Servers with hostnames ending with '-1'"
-    test-sql-like-suffix = {
-      expr = builtins.sort builtins.lessThan
-        (map (r: r.hostname) (sql.query "SELECT hostname FROM servers WHERE hostname LIKE '%-1'"));
-      expected = [ "api-1" "db-1" "web-1" ];
-    };
-
-    # "Servers with hostnames containing 'b'"
-    test-sql-like-contains = {
-      expr = builtins.sort builtins.lessThan
-        (map (r: r.hostname) (sql.query "SELECT hostname FROM servers WHERE hostname LIKE '%b%'"));
-      expected = [ "db-1" "web-1" "web-2" ];
-    };
-
-    # "Full config summary: hostname, services, users"
-    test-sql-config-summary = {
-      expr = let
-        r = builtins.head (qhc "SELECT hostname, nginx_enabled, postgresql_enabled, sudo_enabled, user_count FROM hosts WHERE name = 'web-1'");
-      in {
-        inherit (r) hostname nginx_enabled postgresql_enabled sudo_enabled user_count;
+  config-queries =
+    let
+      qhc = sql.queryHostConfigs;
+    in
+    {
+      # "Which hosts have nginx enabled?"
+      test-sql-nginx-hosts = {
+        expr = builtins.sort builtins.lessThan (
+          map (r: r.name) (qhc "SELECT name FROM hosts WHERE nginx_enabled = true")
+        );
+        expected = [
+          "web-1"
+          "web-2"
+        ]; # both tagged "web"
       };
-      expected = {
-        hostname = "web-1";
-        nginx_enabled = true;
-        postgresql_enabled = false;
-        sudo_enabled = true;
-        user_count = 1;
+
+      # "Which hosts have postgresql enabled?"
+      test-sql-postgresql-hosts = {
+        expr = map (r: r.name) (qhc "SELECT name FROM hosts WHERE postgresql_enabled = true");
+        expected = [ "db-1" ];
+      };
+
+      # "Which hosts have sudo enabled?"
+      test-sql-sudo-hosts = {
+        expr = builtins.sort builtins.lessThan (
+          map (r: r.name) (qhc "SELECT name FROM hosts WHERE sudo_enabled = true")
+        );
+        expected = [
+          "db-1"
+          "web-1"
+        ];
+      };
+
+      # "Which hosts have ACME certs?"
+      test-sql-acme-hosts = {
+        expr = map (r: r.name) (qhc "SELECT name FROM hosts WHERE acme_enabled = true");
+        expected = [ "web-1" ];
+      };
+
+      # "Show me hostnames and their open TCP ports for hosts with ports open"
+      # Use a Nix filter on the SQL result since list-emptiness isn't expressible in our SQL subset
+      test-sql-hostname-ports = {
+        expr = builtins.sort (a: b: a.hostname < b.hostname) (
+          builtins.filter (r: r.open_tcp_ports != [ ]) (qhc "SELECT hostname, open_tcp_ports FROM hosts")
+        );
+        expected = [
+          {
+            hostname = "api-1";
+            open_tcp_ports = [ 50051 ];
+          }
+          {
+            hostname = "web-1";
+            open_tcp_ports = [
+              80
+              443
+            ];
+          }
+        ];
+      };
+
+      # "Which hosts have users but no sudo?"
+      test-sql-users-no-sudo = {
+        expr = map (r: r.name) (
+          qhc "SELECT name FROM hosts WHERE user_count != 0 AND sudo_enabled = false"
+        );
+        expected = [ "api-1" ]; # bob is developer on api-1, no sudo
+      };
+
+      # "Hosts with monitoring enabled"
+      test-sql-monitoring = {
+        expr = builtins.length (qhc "SELECT name FROM hosts WHERE monitoring_enabled = true");
+        expected = 4; # all servers are prod
+      };
+
+      # "Hosts with cron jobs"
+      test-sql-cron-hosts = {
+        expr = builtins.sort builtins.lessThan (
+          map (r: r.name) (qhc "SELECT name FROM hosts WHERE cron_job_count != 0")
+        );
+        expected = [
+          "db-1"
+          "web-1"
+        ];
+      };
+
+      # ─── Comparison operators (>, >=, <, <=) ───
+
+      # "Servers with more than 4 cores"
+      test-sql-gt-cores = {
+        expr = map (r: r.hostname) (sql.query "SELECT hostname FROM servers WHERE cores > 4");
+        expected = [ "db-1" ]; # db-1 has 8 cores
+      };
+
+      # "Servers with at least 16GB RAM"
+      test-sql-gte-ram = {
+        expr = builtins.sort builtins.lessThan (
+          map (r: r.hostname) (sql.query "SELECT hostname FROM servers WHERE ram_gb >= 16")
+        );
+        expected = [
+          "api-1"
+          "db-1"
+        ]; # api-1 has 16, db-1 has 32
+      };
+
+      # "Ports below 1024"
+      test-sql-lt-ports = {
+        expr = builtins.sort builtins.lessThan (
+          map (r: r.number) (sql.query "SELECT number FROM ports WHERE number < 1024")
+        );
+        expected = [
+          80
+          443
+        ];
+      };
+
+      # "Servers with 4 or fewer cores"
+      test-sql-lte-cores = {
+        expr = builtins.sort builtins.lessThan (
+          map (r: r.hostname) (sql.query "SELECT hostname FROM servers WHERE cores <= 4")
+        );
+        expected = [
+          "api-1"
+          "web-1"
+          "web-2"
+        ];
+      };
+
+      # Combined: "High-spec servers in us-east-1"
+      test-sql-gt-and = {
+        expr = map (r: r.hostname) (
+          sql.query "SELECT hostname FROM servers WHERE cores > 4 AND datacenter = 'us-east-1'"
+        );
+        expected = [ "db-1" ];
+      };
+
+      # ─── LIKE operator ───
+
+      # "Servers with hostnames starting with 'web'"
+      test-sql-like-prefix = {
+        expr = builtins.sort builtins.lessThan (
+          map (r: r.hostname) (sql.query "SELECT hostname FROM servers WHERE hostname LIKE 'web%'")
+        );
+        expected = [
+          "web-1"
+          "web-2"
+        ];
+      };
+
+      # "Servers with hostnames ending with '-1'"
+      test-sql-like-suffix = {
+        expr = builtins.sort builtins.lessThan (
+          map (r: r.hostname) (sql.query "SELECT hostname FROM servers WHERE hostname LIKE '%-1'")
+        );
+        expected = [
+          "api-1"
+          "db-1"
+          "web-1"
+        ];
+      };
+
+      # "Servers with hostnames containing 'b'"
+      test-sql-like-contains = {
+        expr = builtins.sort builtins.lessThan (
+          map (r: r.hostname) (sql.query "SELECT hostname FROM servers WHERE hostname LIKE '%b%'")
+        );
+        expected = [
+          "db-1"
+          "web-1"
+          "web-2"
+        ];
+      };
+
+      # "Full config summary: hostname, services, users"
+      test-sql-config-summary = {
+        expr =
+          let
+            r = builtins.head (
+              qhc "SELECT hostname, nginx_enabled, postgresql_enabled, sudo_enabled, user_count FROM hosts WHERE name = 'web-1'"
+            );
+          in
+          {
+            inherit (r)
+              hostname
+              nginx_enabled
+              postgresql_enabled
+              sudo_enabled
+              user_count
+              ;
+          };
+        expected = {
+          hostname = "web-1";
+          nginx_enabled = true;
+          postgresql_enabled = false;
+          sudo_enabled = true;
+          user_count = 1;
+        };
       };
     };
-  };
 
-  rules = let
-    configs = sql.hostConfigs;
-  in {
-    # All servers get SSH (no WHERE = matches all)
-    test-all-servers-have-ssh = {
-      expr = builtins.all (name:
-        configs.${name}.services.openssh.enable or false
-      ) (builtins.attrNames configs);
-      expected = true;
-    };
+  rules =
+    let
+      configs = sql.hostConfigs;
+    in
+    {
+      # All servers get SSH (no WHERE = matches all)
+      test-all-servers-have-ssh = {
+        expr = builtins.all (name: configs.${name}.services.openssh.enable or false) (
+          builtins.attrNames configs
+        );
+        expected = true;
+      };
 
-    # web-1 gets nginx (tagged "web")
-    test-web1-has-nginx = {
-      expr = configs.web-1.services.nginx.enable or false;
-      expected = true;
-    };
+      # web-1 gets nginx (tagged "web")
+      test-web1-has-nginx = {
+        expr = configs.web-1.services.nginx.enable or false;
+        expected = true;
+      };
 
-    # db-1 gets postgresql (tagged "database")
-    test-db1-has-postgresql = {
-      expr = configs.db-1.services.postgresql.enable or false;
-      expected = true;
-    };
+      # db-1 gets postgresql (tagged "database")
+      test-db1-has-postgresql = {
+        expr = configs.db-1.services.postgresql.enable or false;
+        expected = true;
+      };
 
-    # db-1 does NOT get nginx (not tagged "web")
-    test-db1-no-nginx = {
-      expr = configs.db-1.services.nginx.enable or false;
-      expected = false;
-    };
+      # db-1 does NOT get nginx (not tagged "web")
+      test-db1-no-nginx = {
+        expr = configs.db-1.services.nginx.enable or false;
+        expected = false;
+      };
 
-    # web-1 gets ACME (has exposed port 443 via nginx)
-    test-web1-has-acme = {
-      expr = configs.web-1.security.acme.acceptTerms or false;
-      expected = true;
-    };
+      # web-1 gets ACME (has exposed port 443 via nginx)
+      test-web1-has-acme = {
+        expr = configs.web-1.security.acme.acceptTerms or false;
+        expected = true;
+      };
 
-    # api-1 does NOT get ACME (port 50051 is not 443)
-    test-api1-no-acme = {
-      expr = configs.api-1.security.acme.acceptTerms or false;
-      expected = false;
-    };
+      # api-1 does NOT get ACME (port 50051 is not 443)
+      test-api1-no-acme = {
+        expr = configs.api-1.security.acme.acceptTerms or false;
+        expected = false;
+      };
 
-    # web-1 gets sudo (alice has admin role, assigned to web-1)
-    test-web1-has-sudo = {
-      expr = configs.web-1.security.sudo.enable or false;
-      expected = true;
-    };
+      # web-1 gets sudo (alice has admin role, assigned to web-1)
+      test-web1-has-sudo = {
+        expr = configs.web-1.security.sudo.enable or false;
+        expected = true;
+      };
 
-    # api-1 does NOT get sudo (bob is developer, no sudo)
-    test-api1-no-sudo = {
-      expr = configs.api-1.security.sudo.enable or false;
-      expected = false;
-    };
+      # api-1 does NOT get sudo (bob is developer, no sudo)
+      test-api1-no-sudo = {
+        expr = configs.api-1.security.sudo.enable or false;
+        expected = false;
+      };
 
-    # All prod servers get monitoring
-    test-prod-servers-have-monitoring = {
-      expr = builtins.all (name:
-        configs.${name}.services.prometheus.exporters.node.enable or false
-      ) (builtins.attrNames configs);
-      expected = true;
-    };
+      # All prod servers get monitoring
+      test-prod-servers-have-monitoring = {
+        expr = builtins.all (name: configs.${name}.services.prometheus.exporters.node.enable or false) (
+          builtins.attrNames configs
+        );
+        expected = true;
+      };
 
-    # Base module still present (hostname from nixos.nix)
-    test-base-module-preserved = {
-      expr = configs.web-1.networking.hostName;
-      expected = "web-1";
-    };
+      # Base module still present (hostname from nixos.nix)
+      test-base-module-preserved = {
+        expr = configs.web-1.networking.hostName;
+        expected = "web-1";
+      };
 
-    # Base firewall ports still present after rule merge
-    test-base-firewall-preserved = {
-      expr = builtins.sort builtins.lessThan (configs.web-1.networking.firewall.allowedTCPPorts);
-      expected = [ 80 443 ];
+      # Base firewall ports still present after rule merge
+      test-base-firewall-preserved = {
+        expr = builtins.sort builtins.lessThan (configs.web-1.networking.firewall.allowedTCPPorts);
+        expected = [
+          80
+          443
+        ];
+      };
     };
-  };
 
   integration = {
     test-full-pipeline = {
@@ -1236,7 +1478,11 @@ in
           rows = sql.query "SELECT hostname FROM servers WHERE datacenter = 'us-east-1' ORDER BY hostname";
         in
         map (r: r.hostname) rows;
-      expected = [ "db-1" "web-1" "web-2" ];
+      expected = [
+        "db-1"
+        "web-1"
+        "web-2"
+      ];
     };
 
     test-ddl-count-matches-kinds = {
@@ -1255,13 +1501,16 @@ in
       # Combine SQL query with ACL synthesis: servers alice has sudo on
       expr =
         let
-          sudoEntries = lib.filterAttrs (_: ea:
-            builtins.elem "sudo" ea.actions && lib.hasPrefix "server:" ea.resource
+          sudoEntries = lib.filterAttrs (
+            _: ea: builtins.elem "sudo" ea.actions && lib.hasPrefix "server:" ea.resource
           ) sql.effectiveAccess;
           serverNames = map (ea: lib.removePrefix "server:" ea.resource) (builtins.attrValues sudoEntries);
         in
         builtins.sort builtins.lessThan serverNames;
-      expected = [ "db-1" "web-1" ];
+      expected = [
+        "db-1"
+        "web-1"
+      ];
     };
   };
 }

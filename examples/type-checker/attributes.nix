@@ -11,12 +11,12 @@ let
     let
       node = self.nodes.${id};
       local = node.decls;
-      rFields = lib.foldl' (
-        acc: rid: engine.shadow acc (allFields self rid)
-      ) { } (engine.followEdge "R" self id);
-      eFields = lib.foldl' (
-        acc: eid: engine.shadow acc (allFields self eid)
-      ) { } (engine.followEdge "E" self id);
+      rFields = lib.foldl' (acc: rid: engine.shadow acc (allFields self rid)) { } (
+        engine.followEdge "R" self id
+      );
+      eFields = lib.foldl' (acc: eid: engine.shadow acc (allFields self eid)) { } (
+        engine.followEdge "E" self id
+      );
     in
     engine.shadow local (engine.shadow rFields eFields);
 in

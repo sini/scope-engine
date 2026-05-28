@@ -23,11 +23,11 @@ distance(p3, origin)  -- OK: Point3D <: Point2D
 
 | Feature | Paper | What it tests |
 |---|---|---|
-| `subtypeOf` | van Antwerpen 2018 §2.3 | Point2D <: Point3D, structural field subset check |
+| `subtypeOf` | van Antwerpen 2018 §2.3 | Point2D \<: Point3D, structural field subset check |
 | Custom edge labels (R, E) | van Antwerpen 2018 §2.1 | Record extension and class inheritance as labeled edges |
 | `followEdge` / `collectByLabel` | van Antwerpen 2018 §2.1 | Traverse custom edges for field collection |
 | Scoped relations | van Antwerpen 2018 §2.1 | Separate type vs value namespaces via `rels` |
-| HOAG synthesis | Vogt 1989 | Instantiate Pair\<Num, String\> via `synthesize` |
+| HOAG synthesis | Vogt 1989 | Instantiate Pair\<Num, String> via `synthesize` |
 | `nodesByType` | -- | Find all record types including synthesized ones |
 | `ambiguous` | van Antwerpen 2018 | Detect field name ambiguity in extension chains |
 

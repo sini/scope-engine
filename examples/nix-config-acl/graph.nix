@@ -9,7 +9,13 @@
 #     + host.system-access-groups       ← host-specific login gates (merged with env)
 #     |
 #   resolved user                       ← enable + systemGroups derived from above
-{ engine, lib, groups, environments, hosts }:
+{
+  engine,
+  lib,
+  groups,
+  environments,
+  hosts,
+}:
 let
   groupNames = builtins.attrNames groups;
   hostNames = builtins.attrNames hosts;
@@ -19,9 +25,7 @@ let
     # Parent edges: hosts → environments → root
     parentGraph = engine.overlays (
       [ (engine.star "root" (map (e: "env:${e}") envNames)) ]
-      ++ map (host:
-        engine.edge "host:${host}" "env:${hosts.${host}.environment}"
-      ) hostNames
+      ++ map (host: engine.edge "host:${host}" "env:${hosts.${host}.environment}") hostNames
     );
 
     # M edges: group-to-group membership (transitive).
@@ -29,9 +33,12 @@ let
     # M edge FROM member TO group: member inherits group's privileges.
     edgeGraphs = {
       M = engine.overlays (
-        (lib.concatMap (gname:
-          let g = groups.${gname};
-          in map (member: engine.edge "group:${member}" "group:${gname}") g.members
+        (lib.concatMap (
+          gname:
+          let
+            g = groups.${gname};
+          in
+          map (member: engine.edge "group:${member}" "group:${gname}") g.members
         ) groupNames)
         # Ensure ALL groups exist as vertices even if they have no membership edges.
         ++ [ (engine.vertices (map (g: "group:${g}") groupNames)) ]
@@ -39,10 +46,18 @@ let
     };
 
     decls = lib.listToAttrs (
-      [{ name = "root"; value = { }; }]
+      [
+        {
+          name = "root";
+          value = { };
+        }
+      ]
       ++ map (gname: {
         name = "group:${gname}";
-        value = { inherit (groups.${gname}) scope description; name = gname; };
+        value = {
+          inherit (groups.${gname}) scope description;
+          name = gname;
+        };
       }) groupNames
       ++ map (ename: {
         name = "env:${ename}";
@@ -63,11 +78,27 @@ let
     );
 
     types = lib.listToAttrs (
-      [{ name = "root"; value = "root"; }]
-      ++ map (g: { name = "group:${g}"; value = "group"; }) groupNames
-      ++ map (e: { name = "env:${e}"; value = "environment"; }) envNames
-      ++ map (h: { name = "host:${h}"; value = "host"; }) hostNames
+      [
+        {
+          name = "root";
+          value = "root";
+        }
+      ]
+      ++ map (g: {
+        name = "group:${g}";
+        value = "group";
+      }) groupNames
+      ++ map (e: {
+        name = "env:${e}";
+        value = "environment";
+      }) envNames
+      ++ map (h: {
+        name = "host:${h}";
+        value = "host";
+      }) hostNames
     );
   };
 in
-{ inherit baseNodes; }
+{
+  inherit baseNodes;
+}

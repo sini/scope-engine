@@ -40,10 +40,7 @@ let
             && builtins.any (nb: builtins.elem nb.name nodeNames) (t.neededBy or [ ])
           ) allTraitInstances;
         in
-        if extras == [ ] then
-          nodeIsAcc
-        else
-          go (expandTraits (nodeIsAcc ++ extras));
+        if extras == [ ] then nodeIsAcc else go (expandTraits (nodeIsAcc ++ extras));
     in
     go nodeIs;
 

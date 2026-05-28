@@ -32,10 +32,16 @@ let
   networkReachability = reachLib.synthesizeReachability rawFleet;
 
   # NixOS configuration generation
-  nixosLib = import ./nixos.nix { inherit lib; queryFn = sqlEngine.query; };
+  nixosLib = import ./nixos.nix {
+    inherit lib;
+    queryFn = sqlEngine.query;
+  };
 
   # Rule-based host configuration
-  rulesLib = import ./rules.nix { inherit lib; queryFn = sqlEngine.query; };
+  rulesLib = import ./rules.nix {
+    inherit lib;
+    queryFn = sqlEngine.query;
+  };
 
   # Host configs: base modules + rule-matched modules
   hostConfigs = rulesLib.buildAllHostConfigs rawFleet demoRules nixosLib.buildServerModule;
@@ -46,34 +52,60 @@ let
   # Default demo rules — SQL WHERE → NixOS modules
   demoRules = [
     # All servers get SSH (no WHERE = matches all)
-    { nixos = { services.openssh.enable = true; }; }
+    {
+      nixos = {
+        services.openssh.enable = true;
+      };
+    }
 
     # Web-tagged servers get nginx
-    { where = "tags IN ('web')";
-      nixos = { services.nginx.enable = true; }; }
+    {
+      where = "tags IN ('web')";
+      nixos = {
+        services.nginx.enable = true;
+      };
+    }
 
     # Database-tagged servers get postgresql
-    { where = "tags IN ('database')";
-      nixos = { services.postgresql.enable = true; }; }
+    {
+      where = "tags IN ('database')";
+      nixos = {
+        services.postgresql.enable = true;
+      };
+    }
 
     # Servers with exposed port 443 get ACME certs
-    { where = "SELECT s.name FROM servers s JOIN services svc ON svc.server = s.name JOIN ports p ON p.service = svc.name WHERE p.expose = true AND p.number = 443";
-      nixos = { security.acme.acceptTerms = true; }; }
+    {
+      where = "SELECT s.name FROM servers s JOIN services svc ON svc.server = s.name JOIN ports p ON p.service = svc.name WHERE p.expose = true AND p.number = 443";
+      nixos = {
+        security.acme.acceptTerms = true;
+      };
+    }
 
     # Servers with admin-role users get sudo enabled
     # Uses match function: the "servers" field on users is setOf (list),
     # which the SQL JOIN engine can't traverse — so use Nix predicate.
-    { match = { fleet, serverName, ... }:
+    {
+      match =
+        { fleet, serverName, ... }:
         let
-          adminUsers = lib.filterAttrs (_: u:
-            (u.ldap-role or "") == "admin" && builtins.elem serverName (u.servers or [])
-          ) (fleet.user or {});
-        in adminUsers != {};
-      nixos = { security.sudo.enable = true; }; }
+          adminUsers = lib.filterAttrs (
+            _: u: (u.ldap-role or "") == "admin" && builtins.elem serverName (u.servers or [ ])
+          ) (fleet.user or { });
+        in
+        adminUsers != { };
+      nixos = {
+        security.sudo.enable = true;
+      };
+    }
 
     # Prod servers get monitoring
-    { where = "environment = 'prod'";
-      nixos = { services.prometheus.exporters.node.enable = true; }; }
+    {
+      where = "environment = 'prod'";
+      nixos = {
+        services.prometheus.exporters.node.enable = true;
+      };
+    }
   ];
 in
 {
@@ -114,13 +146,23 @@ in
   synthesizeReachability = reachLib.synthesizeReachability;
 
   # NixOS configuration generation
-  inherit (nixosLib) buildServerModule buildAllModules evalServerConfig evalAllConfigs;
+  inherit (nixosLib)
+    buildServerModule
+    buildAllModules
+    evalServerConfig
+    evalAllConfigs
+    ;
   nixosModules = nixosLib.buildAllModules rawFleet;
   nixosConfigs = nixosLib.evalAllConfigs rawFleet;
   nixosQueries = nixosLib.queries;
 
   # Rule-based host configuration
-  inherit (rulesLib) ruleMatchesServer matchingModules buildHostConfig buildAllHostConfigs;
+  inherit (rulesLib)
+    ruleMatchesServer
+    matchingModules
+    buildHostConfig
+    buildAllHostConfigs
+    ;
   inherit demoRules;
   inherit hostConfigs queryHostConfigs;
 }

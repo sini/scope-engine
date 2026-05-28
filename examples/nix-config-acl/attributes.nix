@@ -22,10 +22,7 @@ in
         node = self.nodes.${id};
         hostGates = node.decls.system-access-groups or [ ];
         envGates =
-          if node.parent != null then
-            self.nodes.${node.parent}.decls.system-access-groups or [ ]
-          else
-            [ ];
+          if node.parent != null then self.nodes.${node.parent}.decls.system-access-groups or [ ] else [ ];
       in
       lib.unique (envGates ++ hostGates);
 
@@ -41,11 +38,11 @@ in
         allGroupIds = lib.unique (
           lib.concatMap (gname: transitiveGroups self "group:${gname}") directGroups
         );
-        allGroupNames = map (gid: self.nodes.${gid}.decls.name)
-          (builtins.filter (gid: self.nodes ? ${gid}) allGroupIds);
+        allGroupNames = map (gid: self.nodes.${gid}.decls.name) (
+          builtins.filter (gid: self.nodes ? ${gid}) allGroupIds
+        );
 
-        byScope = scope:
-          builtins.filter (gid: (self.nodes.${gid}.decls.scope or "") == scope) allGroupIds;
+        byScope = scope: builtins.filter (gid: (self.nodes.${gid}.decls.scope or "") == scope) allGroupIds;
         namesForScope = scope: map (gid: self.nodes.${gid}.decls.name) (byScope scope);
 
         systemGroups = namesForScope "system";

@@ -1,5 +1,9 @@
 # Module resolver tests.
-{ engine, lib, result }:
+{
+  engine,
+  lib,
+  result,
+}:
 {
   # ─── Resolution: D < I < P specificity (Neron 2015 Fig. 2) ─────
 

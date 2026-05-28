@@ -17,21 +17,25 @@ let
   };
 
   # Mokhov's connect: cross-product edges from all vertices in g1 to all in g2.
-  connect =
-    g1: g2: {
-      vertices = g1.vertices ++ g2.vertices;
-      edges =
-        g1.edges
-        ++ g2.edges
-        ++ builtins.concatMap (a: map (b: { from = a; to = b; }) g2.vertices) g1.vertices;
-    };
+  connect = g1: g2: {
+    vertices = g1.vertices ++ g2.vertices;
+    edges =
+      g1.edges
+      ++ g2.edges
+      ++ builtins.concatMap (
+        a:
+        map (b: {
+          from = a;
+          to = b;
+        }) g2.vertices
+      ) g1.vertices;
+  };
 
   # Monoidal overlay: commutative, associative, idempotent.
-  overlay =
-    g1: g2: {
-      vertices = g1.vertices ++ g2.vertices;
-      edges = g1.edges ++ g2.edges;
-    };
+  overlay = g1: g2: {
+    vertices = g1.vertices ++ g2.vertices;
+    edges = g1.edges ++ g2.edges;
+  };
 
   # Derived constructors.
   overlays = gs: builtins.foldl' overlay empty gs;
@@ -41,18 +45,19 @@ let
   # Mokhov 2017 §5.1: path xs = edges (zip xs (tail xs)). O(n).
   path =
     vs:
-    if vs == [ ] then empty
-    else if builtins.length vs == 1 then vertex (builtins.head vs)
+    if vs == [ ] then
+      empty
+    else if builtins.length vs == 1 then
+      vertex (builtins.head vs)
     else
-      let pairs = builtins.genList (i: {
-        from = builtins.elemAt vs i;
-        to = builtins.elemAt vs (i + 1);
-      }) (builtins.length vs - 1);
-      in edges pairs;
-  circuit =
-    vs:
-    if vs == [ ] then empty
-    else path (vs ++ [ (builtins.head vs) ]);
+      let
+        pairs = builtins.genList (i: {
+          from = builtins.elemAt vs i;
+          to = builtins.elemAt vs (i + 1);
+        }) (builtins.length vs - 1);
+      in
+      edges pairs;
+  circuit = vs: if vs == [ ] then empty else path (vs ++ [ (builtins.head vs) ]);
   # Mokhov 2017 §5.1 defines star as center→leaves. Inverted here: leaves→center.
   # Convention: parent edges point from child to parent.
   star = center: leaves: connect (vertices leaves) (vertex center);
@@ -69,14 +74,18 @@ let
   # Construct graph from a list of trees (forest).
   forest = ts: overlays (map tree ts);
   # Flip all edge directions.
-  transpose =
-    graph: {
-      inherit (graph) vertices;
-      edges = map (e: { from = e.to; to = e.from; }) graph.edges;
-    };
+  transpose = graph: {
+    inherit (graph) vertices;
+    edges = map (e: {
+      from = e.to;
+      to = e.from;
+    }) graph.edges;
+  };
   # Membership predicates.
   hasVertex = v: graph: builtins.elem v graph.vertices;
-  hasEdge = from: to: graph: builtins.any (e: e.from == from && e.to == to) graph.edges;
+  hasEdge =
+    from: to: graph:
+    builtins.any (e: e.from == from && e.to == to) graph.edges;
   # Graph removal operations.
   removeVertex = v: induce (x: x != v);
   removeEdge = efrom: eto: graph: {
@@ -85,21 +94,19 @@ let
   };
 
   # Map over vertices.
-  gmap =
-    f: graph: {
-      vertices = map f graph.vertices;
-      edges = map (e: {
-        from = f e.from;
-        to = f e.to;
-      }) graph.edges;
-    };
+  gmap = f: graph: {
+    vertices = map f graph.vertices;
+    edges = map (e: {
+      from = f e.from;
+      to = f e.to;
+    }) graph.edges;
+  };
 
   # Filter to subgraph matching predicate.
-  induce =
-    pred: graph: {
-      vertices = builtins.filter pred graph.vertices;
-      edges = builtins.filter (e: pred e.from && pred e.to) graph.edges;
-    };
+  induce = pred: graph: {
+    vertices = builtins.filter pred graph.vertices;
+    edges = builtins.filter (e: pred e.from && pred e.to) graph.edges;
+  };
 
 in
 {
