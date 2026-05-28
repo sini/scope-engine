@@ -4,8 +4,22 @@
 # Two scopes:
 #   direct:     user's assigned servers (or services on them, or LBs fronting those)
 #   transitive: gen-graph reachableFrom to walk dependency graph
-{ lib }:
+{
+  lib,
+  graphLib,
+  instanceNodes,
+}:
 let
+  # Bidirectional instance graph: union forward + reversed edges
+  biInstanceNodes =
+    let
+      rev = graphLib.transpose instanceNodes;
+    in
+    {
+      edges = id: (instanceNodes.edges id) ++ (rev.edges id);
+      inherit (instanceNodes) nodes parent nodeData;
+    };
+
   synthesizeAccess =
     rawFleet:
     let
@@ -84,28 +98,16 @@ let
             onServerServices = builtins.filter (
               svcName: builtins.elem (services.${svcName}.server or "") serverList
             ) (builtins.attrNames services);
-            # Walk service dependencies
-            deps = rawFleet.service-dependency or { };
-            walkDeps =
-              visited: queue:
-              if queue == [ ] then
-                visited
-              else
-                let
-                  current = builtins.head queue;
-                  rest = builtins.tail queue;
-                  # Find dependencies where current is downstream
-                  upstreams = lib.mapAttrsToList (_: d: d.upstream) (
-                    lib.filterAttrs (_: d: d.downstream == current && !(builtins.elem d.upstream visited)) deps
-                  );
-                  # Find dependencies where current is upstream
-                  downstreams = lib.mapAttrsToList (_: d: d.downstream) (
-                    lib.filterAttrs (_: d: d.upstream == current && !(builtins.elem d.downstream visited)) deps
-                  );
-                  newServices = upstreams ++ downstreams;
-                in
-                walkDeps (visited ++ newServices) (rest ++ newServices);
-            reachableServices = lib.unique (onServerServices ++ walkDeps onServerServices onServerServices);
+            # Walk service dependencies via bidirectional instance graph
+            reachable = builtins.concatMap (
+              svc: graphLib.reachableFrom biInstanceNodes "service:${svc}"
+            ) onServerServices;
+            reachableServices = lib.unique (
+              onServerServices
+              ++ map (id: lib.removePrefix "service:" id) (
+                builtins.filter (id: lib.hasPrefix "service:" id) reachable
+              )
+            );
           in
           map (s: "service:${s}") reachableServices
         else if policy.resource-kind == "loadbalancer" then

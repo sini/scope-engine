@@ -88,7 +88,7 @@ let
   ddl = ddlLib.generateDDL evaluated.schema;
 
   # Synthesis
-  aclLib = import ./acl.nix { inherit lib; };
+  aclLib = import ./acl.nix { inherit lib graphLib instanceNodes; };
   reachLib = import ./reachability.nix { inherit lib; };
   effectiveAccess = aclLib.synthesizeAccess rawFleet;
   networkReachability = reachLib.synthesizeReachability rawFleet;
