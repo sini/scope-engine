@@ -71,7 +71,7 @@ let
   };
 in
 {
-  "eval-debug" = {
+  flake.tests."eval-debug" = {
     test-no-cycle-works = {
       expr = debugResult.get "a" "value";
       expected = 42;

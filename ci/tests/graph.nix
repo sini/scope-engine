@@ -1,6 +1,6 @@
 { lib, engine, ... }:
 {
-  "graph" = {
+  flake.tests."graph" = {
     test-empty = {
       expr = engine.empty;
       expected = {

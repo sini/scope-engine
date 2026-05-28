@@ -64,7 +64,7 @@ let
   };
 in
 {
-  "eval" = {
+  flake.tests."eval" = {
     test-node-returns-root = {
       expr = (result.node "parent").id;
       expected = "parent";

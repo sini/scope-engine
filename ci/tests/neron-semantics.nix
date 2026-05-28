@@ -18,7 +18,7 @@ in
 {
   # === Specificity ordering (Neron 2015 §2.5, Fig. 2) ===
 
-  specificity = {
+  flake.tests.specificity = {
     # D < I < P: local shadows import
     test-local-shadows-import = {
       expr =
@@ -144,7 +144,7 @@ in
 
   # === Well-formedness and transitive imports (Neron 2015 §2.4) ===
 
-  wf-policy = {
+  flake.tests.wf-policy = {
     # Transitive imports: A imports B, B imports C. A can see C's decls.
     test-transitive-imports = {
       expr =
@@ -251,7 +251,7 @@ in
 
   # === Ambiguity detection (van Antwerpen 2018 §2.3) ===
 
-  ambiguity = {
+  flake.tests.ambiguity = {
     # Two imports provide the same declaration — ambiguous
     test-ambiguous-two-providers = {
       expr =
@@ -330,7 +330,7 @@ in
 
   # === Custom edge labels (van Antwerpen 2018 §2.1) ===
 
-  custom-edges = {
+  flake.tests.custom-edges = {
     # followEdge traverses a custom label
     test-follow-custom-edge = {
       expr =
@@ -432,7 +432,7 @@ in
 
   # === subtypeOf (van Antwerpen 2018 §2.3) ===
 
-  subtype = {
+  flake.tests.subtype = {
     # A's decls are a subset of B's — A subtypes B
     test-subtype-subset = {
       expr =
@@ -542,7 +542,7 @@ in
 
   # === Scoped relations as computed attributes ===
 
-  relations = {
+  flake.tests.relations = {
     # In the HOAG model, scoped relations are computed attributes.
     # A node can have multiple "namespaces" — each is a separate attribute.
     test-scoped-relations-via-attributes = {

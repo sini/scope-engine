@@ -42,7 +42,7 @@ let
   };
 in
 {
-  "queries" = {
+  flake.tests."queries" = {
     test-parent-of-child = {
       expr = parent result "a";
       expected = "root";

@@ -58,7 +58,7 @@ let
   };
 in
 {
-  "build-nodes" = {
+  flake.tests."build-nodes" = {
     test-output-has-all-vertices = {
       expr = builtins.sort builtins.lessThan (builtins.attrNames basic);
       expected = [

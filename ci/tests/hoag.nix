@@ -101,7 +101,7 @@ let
   };
 in
 {
-  "hoag" = {
+  flake.tests."hoag" = {
     test-multi-level-env-label = {
       expr = result.get "env" "label";
       expected = "production";

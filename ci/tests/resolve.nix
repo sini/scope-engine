@@ -8,7 +8,7 @@ let
     ;
 in
 {
-  "resolve" = {
+  flake.tests."resolve" = {
     test-shadow-inner-wins = {
       expr =
         shadow

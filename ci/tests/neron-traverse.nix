@@ -146,7 +146,7 @@ let
   };
 in
 {
-  "neron-traverse" = {
+  flake.tests."neron-traverse" = {
     test-p-only-chain = {
       expr = pOnlyResult.get "leaf" "vals";
       expected = [

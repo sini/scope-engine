@@ -93,7 +93,7 @@ let
   };
 in
 {
-  "query" = {
+  flake.tests."query" = {
     test-query-finds-import = {
       expr = result.get "a" "resolved";
       expected = "from-b";

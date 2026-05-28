@@ -85,7 +85,7 @@ let
   };
 in
 {
-  "circular" = {
+  flake.tests."circular" = {
     test-converges-to-target = {
       expr = convergingResult.get "node" "counter";
       expected = 10;

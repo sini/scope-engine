@@ -69,7 +69,7 @@ let
   };
 in
 {
-  "collection-attr" = {
+  flake.tests."collection-attr" = {
     test-traverse-imports = {
       expr = result.get "a" "import-tags";
       expected = [ "b-tag" ];
