@@ -5,6 +5,7 @@
     gen-schema.url = "github:sini/gen-schema";
     gen-graph.url = "github:sini/gen-graph";
     gen-algebra.url = "github:sini/gen-algebra";
+    gen-select.url = "github:sini/gen-select";
     nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
   };
   outputs =
@@ -13,6 +14,7 @@
       gen-schema,
       gen-graph,
       gen-algebra,
+      gen-select,
       nixpkgs,
       ...
     }:
@@ -20,6 +22,7 @@
       lib = nixpkgs.lib;
       engine = gen-scope { inherit lib; };
       genLib = gen-algebra { inherit lib; };
+      selectLib = gen-select.lib;
       schemaLib = import "${gen-schema}/nix/lib" {
         inherit lib;
         inputs = {
@@ -34,6 +37,7 @@
           schemaLib
           graphLib
           genLib
+          selectLib
           ;
       };
     in

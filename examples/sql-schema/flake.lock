@@ -15,6 +15,21 @@
         "type": "github"
       }
     },
+    "gen-algebra_2": {
+      "locked": {
+        "lastModified": 1779816786,
+        "narHash": "sha256-FzyAReCRt009sv2+Rl3LmtN7av1UZgQQR2n2BiefgJ4=",
+        "owner": "sini",
+        "repo": "gen-algebra",
+        "rev": "86f2a80d267d747c826b6ba45cb2fff5c0a55365",
+        "type": "github"
+      },
+      "original": {
+        "owner": "sini",
+        "repo": "gen-algebra",
+        "type": "github"
+      }
+    },
     "gen-graph": {
       "inputs": {
         "nixpkgs": "nixpkgs"
@@ -66,6 +81,25 @@
         "type": "github"
       }
     },
+    "gen-select": {
+      "inputs": {
+        "gen-algebra": "gen-algebra_2",
+        "nixpkgs": "nixpkgs_3"
+      },
+      "locked": {
+        "lastModified": 1779949160,
+        "narHash": "sha256-Tn6yPSdggyu+H8CaLFZdHGGaDLT2Ro8xiTG8WHMBzHw=",
+        "owner": "sini",
+        "repo": "gen-select",
+        "rev": "7a03286069c1e921021eb82c23ba53ffb9b8023e",
+        "type": "github"
+      },
+      "original": {
+        "owner": "sini",
+        "repo": "gen-select",
+        "type": "github"
+      }
+    },
     "nixpkgs": {
       "locked": {
         "lastModified": 1779560665,
@@ -114,13 +148,30 @@
         "type": "github"
       }
     },
+    "nixpkgs_4": {
+      "locked": {
+        "lastModified": 1779560665,
+        "narHash": "sha256-tpyBcxPpcQb8ukyNF7DoCwfSY3VPsxHoYwj00Cayv5o=",
+        "owner": "NixOS",
+        "repo": "nixpkgs",
+        "rev": "64c08a7ca051951c8eae34e3e3cb1e202fe36786",
+        "type": "github"
+      },
+      "original": {
+        "owner": "NixOS",
+        "ref": "nixos-unstable",
+        "repo": "nixpkgs",
+        "type": "github"
+      }
+    },
     "root": {
       "inputs": {
         "gen-algebra": "gen-algebra",
         "gen-graph": "gen-graph",
         "gen-schema": "gen-schema",
         "gen-scope": "gen-scope",
-        "nixpkgs": "nixpkgs_3"
+        "gen-select": "gen-select",
+        "nixpkgs": "nixpkgs_4"
       }
     }
   },

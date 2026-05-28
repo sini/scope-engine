@@ -4,6 +4,7 @@
   schemaLib,
   graphLib,
   genLib,
+  selectLib,
 }:
 let
   rawFleet = import ./fleet.nix;
@@ -79,7 +80,7 @@ let
 
   # SQL parser + engine
   sqlParser = import ./sql.nix { inherit lib; };
-  sqlEngine = import ./engine.nix { inherit lib; };
+  sqlEngine = import ./engine.nix { inherit lib selectLib; };
 
   # DDL generator
   ddlLib = import ./ddl.nix { inherit lib schemaLib; };

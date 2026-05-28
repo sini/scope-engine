@@ -2,7 +2,7 @@
 #
 # JOINs are resolved via FK field lookup in instance registries.
 # WHERE predicates filter rows. ORDER BY sorts. LIMIT truncates.
-{ lib }:
+{ lib, selectLib }:
 let
   # Kind name normalization: SQL uses plural/underscored table names,
   # fleet data uses singular/hyphenated kind names.
@@ -60,109 +60,146 @@ let
     else
       raw;
 
-  # Evaluate a WHERE predicate against a row with alias resolution
-  evalWhere =
-    aliases: row: expr:
+  sel = selectLib;
+
+  # Convert SQL LIKE pattern to Nix regex: % → .*, _ → ., escape rest
+  likeToRegex =
+    p:
+    let
+      chars = lib.stringToCharacters p;
+      converted = map (
+        c:
+        if c == "%" then
+          ".*"
+        else if c == "_" then
+          "."
+        else if
+          builtins.elem c [
+            "."
+            "^"
+            "$"
+            "["
+            "]"
+            "("
+            ")"
+            "{"
+            "}"
+            "\\"
+            "+"
+            "?"
+            "|"
+          ]
+        then
+          "\\${c}"
+        else
+          c
+      ) chars;
+    in
+    lib.concatStrings converted;
+
+  # Build a gen-select context for a single row
+  mkRowContext = row: {
+    data = _id: row;
+    parent = _: null;
+    children = _: [ ];
+    ancestors = _: [ ];
+    siblings = _: [ ];
+  };
+
+  # Compile a WHERE AST node into a gen-select selector
+  astToSelector =
+    aliases: expr:
     if expr == null then
-      true
+      sel.star
     else if expr.op == "AND" then
-      evalWhere aliases row expr.left && evalWhere aliases row expr.right
+      sel.and [
+        (astToSelector aliases expr.left)
+        (astToSelector aliases expr.right)
+      ]
     else if expr.op == "OR" then
-      evalWhere aliases row expr.left || evalWhere aliases row expr.right
+      sel.any [
+        (astToSelector aliases expr.left)
+        (astToSelector aliases expr.right)
+      ]
     else if expr.op == "=" then
-      let
-        lv = resolveValue aliases row expr.left;
-        rv = resolveValue aliases row expr.right;
-      in
-      lv == rv
+      sel.when (
+        _id: ctx:
+        let
+          row = ctx.data _id;
+        in
+        resolveValue aliases row expr.left == resolveValue aliases row expr.right
+      )
     else if expr.op == "!=" then
-      let
-        lv = resolveValue aliases row expr.left;
-        rv = resolveValue aliases row expr.right;
-      in
-      lv != rv
+      sel.when (
+        _id: ctx:
+        let
+          row = ctx.data _id;
+        in
+        resolveValue aliases row expr.left != resolveValue aliases row expr.right
+      )
     else if expr.op == ">" then
-      let
-        lv = resolveValue aliases row expr.left;
-        rv = resolveValue aliases row expr.right;
-      in
-      lv > rv
+      sel.when (
+        _id: ctx:
+        let
+          row = ctx.data _id;
+        in
+        resolveValue aliases row expr.left > resolveValue aliases row expr.right
+      )
     else if expr.op == ">=" then
-      let
-        lv = resolveValue aliases row expr.left;
-        rv = resolveValue aliases row expr.right;
-      in
-      lv >= rv
+      sel.when (
+        _id: ctx:
+        let
+          row = ctx.data _id;
+        in
+        resolveValue aliases row expr.left >= resolveValue aliases row expr.right
+      )
     else if expr.op == "<" then
-      let
-        lv = resolveValue aliases row expr.left;
-        rv = resolveValue aliases row expr.right;
-      in
-      lv < rv
+      sel.when (
+        _id: ctx:
+        let
+          row = ctx.data _id;
+        in
+        resolveValue aliases row expr.left < resolveValue aliases row expr.right
+      )
     else if expr.op == "<=" then
-      let
-        lv = resolveValue aliases row expr.left;
-        rv = resolveValue aliases row expr.right;
-      in
-      lv <= rv
+      sel.when (
+        _id: ctx:
+        let
+          row = ctx.data _id;
+        in
+        resolveValue aliases row expr.left <= resolveValue aliases row expr.right
+      )
     else if expr.op == "LIKE" then
-      let
-        lv = resolveValue aliases row expr.left;
-        pattern = expr.right;
-        # Convert SQL LIKE pattern to Nix regex: % → .*, _ → ., escape rest
-        toRegex =
-          p:
-          let
-            chars = lib.stringToCharacters p;
-            converted = map (
-              c:
-              if c == "%" then
-                ".*"
-              else if c == "_" then
-                "."
-              else if
-                builtins.elem c [
-                  "."
-                  "^"
-                  "$"
-                  "["
-                  "]"
-                  "("
-                  ")"
-                  "{"
-                  "}"
-                  "\\"
-                  "+"
-                  "?"
-                  "|"
-                ]
-              then
-                "\\${c}"
-              else
-                c
-            ) chars;
-          in
-          lib.concatStrings converted;
-        regex = toRegex pattern;
-      in
-      builtins.isString lv && builtins.match regex lv != null
+      sel.when (
+        _id: ctx:
+        let
+          row = ctx.data _id;
+          lv = resolveValue aliases row expr.left;
+          regex = likeToRegex expr.right;
+        in
+        builtins.isString lv && builtins.match regex lv != null
+      )
     else if expr.op == "IN" then
-      let
-        lv = resolveValue aliases row expr.left;
-        rv = expr.right;
-      in
-      # Forward: column IN (values)
-      if builtins.isList rv then
-        if builtins.isList lv then builtins.any (item: builtins.elem item rv) lv else builtins.elem lv rv
-      # Reverse: 'value' IN column (column is a list)
-      else if builtins.isList lv then
-        builtins.elem rv lv
-      else
-        lv == rv
+      sel.when (
+        _id: ctx:
+        let
+          row = ctx.data _id;
+          lv = resolveValue aliases row expr.left;
+          rv = expr.right;
+        in
+        # Forward: column IN (values)
+        if builtins.isList rv then
+          if builtins.isList lv then builtins.any (item: builtins.elem item rv) lv else builtins.elem lv rv
+        # Reverse: 'value' IN column (column is a list)
+        else if builtins.isList lv then
+          builtins.elem rv lv
+        else
+          lv == rv
+      )
     else if expr.op == "IS NULL" then
-      resolveValue aliases row expr.left == null
+      sel.when (_id: ctx: resolveValue aliases (ctx.data _id) expr.left == null)
     else if expr.op == "IS NOT NULL" then
-      resolveValue aliases row expr.left != null
+      sel.when (_id: ctx: resolveValue aliases (ctx.data _id) expr.left != null)
     else
       throw "sql-engine: unsupported WHERE operator '${expr.op}'";
 
@@ -302,8 +339,15 @@ let
         rows: join: resolveJoin fleet join rows (builtins.head rows).aliases or { }
       ) initialRows ast.joins;
 
-      # Apply WHERE filter
-      filteredRows = builtins.filter (item: evalWhere item.aliases item.row ast.where) joinedRows;
+      # Apply WHERE filter via gen-select selector
+      filteredRows = builtins.filter (
+        item:
+        let
+          selector = astToSelector item.aliases ast.where;
+          ctx = mkRowContext item.row;
+        in
+        selectLib.matches selector "row" ctx
+      ) joinedRows;
 
       # Project columns
       projectedRows = map (item: projectRow item.aliases item.row ast.select) filteredRows;
@@ -328,7 +372,8 @@ in
   inherit
     query
     evalQuery
-    evalWhere
+    astToSelector
+    mkRowContext
     resolveKind
     getRows
     getField
