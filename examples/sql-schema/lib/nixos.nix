@@ -6,10 +6,8 @@
 # nest uses CSS selectors to pick config → host, this uses SQL queries.
 {
   lib,
-  queryFn,
   bindLib,
 }:
-# queryFn: fleet → sqlString → results (the query function from engine.nix)
 let
   # Find services running on a server
   serverServices =

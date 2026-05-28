@@ -1,9 +1,7 @@
 {
   lib,
-  engine,
   schemaLib,
   graphLib,
-  genLib,
   selectLib,
   deriveLib,
   bindLib,
@@ -97,13 +95,11 @@ let
   # NixOS configuration generation
   nixosLib = import ./nixos.nix {
     inherit lib bindLib;
-    queryFn = sqlEngine.query;
   };
 
   # Rule-based host configuration (gen-derive stratified dispatch)
   rulesLib = import ./rules.nix {
     inherit lib deriveLib selectLib;
-    queryFn = sqlEngine.query;
   };
 
   sel = selectLib;

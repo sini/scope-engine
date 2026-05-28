@@ -1,5 +1,5 @@
 {
-  description = "Infrastructure schema demo — SQL query engine on gen-schema + gen-graph + gen-scope";
+  description = "Infrastructure schema demo — all 8 gen libraries: schema, scope, graph, select, derive, bind, algebra";
   inputs = {
     gen-scope.url = "github:sini/gen-scope";
     gen-schema.url = "github:sini/gen-schema";
@@ -39,10 +39,8 @@
       sql = import ./lib {
         inherit
           lib
-          engine
           schemaLib
           graphLib
-          genLib
           selectLib
           deriveLib
           bindLib
@@ -54,11 +52,9 @@
       tests = import ./tests.nix {
         inherit
           lib
-          engine
           sql
           schemaLib
           graphLib
-          genLib
           ;
       };
     };

@@ -9,7 +9,6 @@
   lib,
   deriveLib,
   selectLib,
-  queryFn,
 }:
 let
   inherit (deriveLib)
@@ -81,7 +80,7 @@ let
             siblings
             ;
         };
-        eq = a: b: (a.data "x") == (b.data "x");
+        eq = a: b: (a.data serverName) == (b.data serverName);
       };
       nixosActions = result.actions.config or [ ];
     in
