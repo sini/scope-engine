@@ -6,6 +6,7 @@
   genLib,
   selectLib,
   deriveLib,
+  bindLib,
 }:
 let
   rawFleet = import ./fleet.nix;
@@ -95,7 +96,7 @@ let
 
   # NixOS configuration generation
   nixosLib = import ./nixos.nix {
-    inherit lib;
+    inherit lib bindLib;
     queryFn = sqlEngine.query;
   };
 
@@ -194,7 +195,7 @@ let
   hostConfigs = lib.mapAttrs (
     name: _:
     let
-      base = nixosLib.buildServerModule rawFleet name;
+      base = nixosLib.evalServerModule rawFleet name;
       ruleConfig = rulesLib.buildHostConfig evaluated.fleet demoRules name;
     in
     lib.recursiveUpdate base ruleConfig
@@ -242,6 +243,7 @@ in
   # NixOS configuration generation
   inherit (nixosLib)
     buildServerModule
+    evalServerModule
     buildAllModules
     evalServerConfig
     evalAllConfigs

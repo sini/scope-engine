@@ -4,7 +4,11 @@
 #
 # This is the SQL equivalent of nest-traits' class.nixos builder:
 # nest uses CSS selectors to pick config → host, this uses SQL queries.
-{ lib, queryFn }:
+{
+  lib,
+  queryFn,
+  bindLib,
+}:
 # queryFn: fleet → sqlString → results (the query function from engine.nix)
 let
   # Find services running on a server
@@ -72,11 +76,16 @@ let
     in
     role.permissions or [ ];
 
-  # Build a NixOS module for a single server
-  buildServerModule =
-    fleet: serverName:
+  # Module function: takes fleet context, produces NixOS config attrset.
+  # Separated from wrapping so gen-bind can inspect and bind args.
+  serverModuleFn =
+    {
+      fleet,
+      serverName,
+      server,
+      ...
+    }:
     let
-      server = fleet.server.${serverName};
       interfaces = serverInterfaces fleet serverName;
       services = serverServices fleet serverName;
       ports = serverPorts fleet serverName;
@@ -145,14 +154,45 @@ let
       environment.etc."environment".text = server.environment;
     };
 
-  # Build NixOS modules for all servers in the fleet.
-  # Returns { serverName = nixosModule; } — plain attrsets, not functions.
-  # Consumers can merge these into real NixOS configurations.
+  # Build a wrapped NixOS module for a single server.
+  # Returns gen-bind result: { module, wrapped, signature, advertisedArgs }
+  buildServerModule =
+    fleet: serverName:
+    let
+      server = fleet.server.${serverName};
+    in
+    bindLib.wrap {
+      module = serverModuleFn;
+      bindings = {
+        inherit fleet serverName server;
+      };
+      contracts = {
+        server = bindLib.contract.hasFields [
+          "hostname"
+          "os"
+          "cores"
+          "datacenter"
+          "environment"
+        ];
+      };
+      provenance = {
+        server = {
+          source = "fleet-registry";
+          scope = "server=${serverName}";
+        };
+      };
+    };
+
+  # Evaluate a server module — calls the wrapped module to get the plain config attrset.
+  # Backward-compatible replacement for code that expected buildServerModule to return a config.
+  evalServerModule = fleet: serverName: (buildServerModule fleet serverName).module;
+
+  # Build wrapped modules for all servers in the fleet.
+  # Returns { serverName = gen-bind result; }
   buildAllModules = fleet: lib.mapAttrs (name: _: buildServerModule fleet name) (fleet.server or { });
 
-  # Evaluate a server module directly — the module is already a plain attrset,
-  # so no evalModules needed. Returns the config attrset for querying.
-  evalServerConfig = fleet: serverName: buildServerModule fleet serverName;
+  # Evaluate a server module directly — returns the config attrset for querying.
+  evalServerConfig = fleet: serverName: evalServerModule fleet serverName;
 
   # Evaluate all servers, returning { serverName = config; }
   evalAllConfigs = fleet: lib.mapAttrs (name: _: evalServerConfig fleet name) (fleet.server or { });
@@ -249,6 +289,7 @@ in
 {
   inherit
     buildServerModule
+    evalServerModule
     buildAllModules
     evalServerConfig
     evalAllConfigs

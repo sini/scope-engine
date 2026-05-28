@@ -974,6 +974,54 @@ in
       };
     };
 
+  bind = {
+    test-wrapped-is-true = {
+      expr = (sql.buildServerModule sql.rawFleet "web-1").wrapped;
+      expected = true;
+    };
+
+    test-signature-bound-keys = {
+      expr = builtins.sort builtins.lessThan (
+        builtins.attrNames (sql.buildServerModule sql.rawFleet "web-1").signature.bound
+      );
+      expected = [
+        "fleet"
+        "server"
+        "serverName"
+      ];
+    };
+
+    test-advertised-args-empty = {
+      # All args are bound, so no remaining advertised args
+      expr = (sql.buildServerModule sql.rawFleet "web-1").advertisedArgs;
+      expected = { };
+    };
+
+    test-eval-server-module-matches-config = {
+      # evalServerModule produces the same config as the old buildServerModule did
+      expr = (sql.evalServerModule sql.rawFleet "web-1").networking.hostName;
+      expected = "web-1";
+    };
+
+    test-contract-violation = {
+      expr =
+        let
+          badFleet = sql.rawFleet // {
+            server = {
+              bad = {
+                os = "nixos";
+              };
+            };
+          };
+          result = builtins.tryEval (
+            builtins.deepSeq (sql.evalServerModule (sql.evalSchema badFleet).fleet "bad") { }
+          );
+        in
+        result.success;
+      expected = false;
+    };
+  };
+
   nixos =
     let
       configs = sql.nixosConfigs;

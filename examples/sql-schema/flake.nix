@@ -7,6 +7,7 @@
     gen-algebra.url = "github:sini/gen-algebra";
     gen-select.url = "github:sini/gen-select";
     gen-derive.url = "github:sini/gen-derive";
+    gen-bind.url = "github:sini/gen-bind";
     nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
   };
   outputs =
@@ -17,6 +18,7 @@
       gen-algebra,
       gen-select,
       gen-derive,
+      gen-bind,
       nixpkgs,
       ...
     }:
@@ -26,6 +28,7 @@
       genLib = gen-algebra { inherit lib; };
       selectLib = gen-select.lib;
       deriveLib = gen-derive.lib;
+      bindLib = gen-bind.lib;
       schemaLib = import "${gen-schema}/nix/lib" {
         inherit lib;
         inputs = {
@@ -42,6 +45,7 @@
           genLib
           selectLib
           deriveLib
+          bindLib
           ;
       };
     in
