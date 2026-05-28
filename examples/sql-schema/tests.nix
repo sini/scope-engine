@@ -115,7 +115,7 @@ in
     };
 
     test-server-ref-fields = {
-      expr = builtins.sort builtins.lessThan (builtins.attrNames (schema._kindMeta "server").refs);
+      expr = builtins.sort builtins.lessThan (builtins.attrNames schema.server.refs);
       expected = [
         "datacenter"
         "environment"
@@ -125,7 +125,7 @@ in
     };
 
     test-user-ref-fields = {
-      expr = builtins.sort builtins.lessThan (builtins.attrNames (schema._kindMeta "user").refs);
+      expr = builtins.sort builtins.lessThan (builtins.attrNames schema.user.refs);
       expected = [
         "ldap-role"
         "manager"

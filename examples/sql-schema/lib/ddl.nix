@@ -107,8 +107,8 @@ let
   generateTable =
     schema: kindName:
     let
-      kindMeta = schema._kindMeta kindName;
-      refs = kindMeta.refs;
+      kindResult = schema.${kindName};
+      refs = lib.mapAttrs (_: v: v.refKind) kindResult.refs;
       tableName = escapeIdent kindName;
 
       # Option names minus internal ones
@@ -120,13 +120,13 @@ let
           "id_hash"
           "_module"
         ])
-      ) kindMeta.optionNames;
+      ) (builtins.attrNames kindResult.options);
 
       # Build column definitions
       columns = builtins.concatMap (
         optName:
         let
-          opt = kindMeta.options.${optName};
+          opt = kindResult.options.${optName};
           optType = opt.type or { name = "text"; };
           sqlType = nixTypeToSql optType;
           nullable = isNullable optType;
@@ -152,7 +152,7 @@ let
       junctionTables = builtins.concatMap (
         optName:
         let
-          opt = kindMeta.options.${optName};
+          opt = kindResult.options.${optName};
           optType = opt.type or { name = "text"; };
         in
         if isJunctionRef optType && refs ? ${optName} then
@@ -198,8 +198,7 @@ let
   generateIndexes =
     schema: kindName:
     let
-      kindMeta = schema._kindMeta kindName;
-      refs = kindMeta.refs;
+      refs = lib.mapAttrs (_: v: v.refKind) schema.${kindName}.refs;
       tableName = escapeIdent kindName;
     in
     lib.mapAttrsToList (
@@ -235,7 +234,7 @@ let
       deps = lib.genAttrs kindNames (
         k:
         let
-          refTargets = builtins.attrValues (schema._kindMeta k).refs;
+          refTargets = map (v: v.refKind) (builtins.attrValues schema.${k}.refs);
           parentDep = schema._topology.${k}.parent;
         in
         # Filter out self-refs (they don't create ordering constraints)

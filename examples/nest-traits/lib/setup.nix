@@ -116,7 +116,7 @@ let
           if isSelector val then resolveSelector registry val else default;
       };
     in
-    schemaLib.mkInstanceRegistry schema "trait" {
+    schemaLib.mkInstanceRegistry schema.trait {
       strict = false;
       refinements = {
         name = [

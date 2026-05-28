@@ -44,7 +44,7 @@ let
         lib.mapAttrsToList (
           kindName: instances:
           let
-            refs = (evaluated.schema._kindMeta kindName).refs;
+            refs = lib.mapAttrs (_: v: v.refKind) evaluated.schema.${kindName}.refs;
           in
           lib.concatLists (
             lib.mapAttrsToList (
