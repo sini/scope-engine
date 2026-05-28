@@ -5,7 +5,7 @@
   result,
 }:
 {
-  # ─── Structural subtyping (van Antwerpen 2018 §2.3) ────────────
+  # --- Structural subtyping (van Antwerpen 2018 §2.3) ------------
 
   point2d-subtype-of-point3d = engine.subtypeOf { } result "Point2D" "Point3D";
   point3d-not-subtype-of-point2d = engine.subtypeOf { } result "Point3D" "Point2D";
@@ -16,69 +16,69 @@
       a == b;
   } result "Point2D" "Point3D";
 
-  # ─── Record extension via R edges (van Antwerpen 2018 Fig. 4) ──
+  # --- Record extension via R edges (van Antwerpen 2018 Fig. 4) --
 
   named-point-fields =
     let
-      fields = result.evaluated.NamedPoint.get "fields";
+      fields = result.get "NamedPoint" "fields";
     in
     builtins.sort builtins.lessThan (builtins.attrNames fields);
 
-  named-point-field-count = result.evaluated.NamedPoint.get "fieldCount";
+  named-point-field-count = result.get "NamedPoint" "fieldCount";
 
   named-point-name-type =
     let
-      fields = result.evaluated.NamedPoint.get "fields";
+      fields = result.get "NamedPoint" "fields";
     in
     fields.name;
 
-  # ─── Class inheritance via E edges (Neron 2015 §3, Fig. 16) ────
+  # --- Class inheritance via E edges (Neron 2015 §3, Fig. 16) ----
 
   circle-fields =
     let
-      fields = result.evaluated.Circle.get "fields";
+      fields = result.get "Circle" "fields";
     in
     builtins.sort builtins.lessThan (builtins.attrNames fields);
 
   rect-fields =
     let
-      fields = result.evaluated.Rect.get "fields";
+      fields = result.get "Rect" "fields";
     in
     builtins.sort builtins.lessThan (builtins.attrNames fields);
 
-  shape-fields = builtins.attrNames (result.evaluated.Shape.get "fields");
+  shape-fields = builtins.attrNames (result.get "Shape" "fields");
 
   circle-has-shape-fields =
     let
-      shapeFields = result.evaluated.Shape.get "fields";
-      circleFields = result.evaluated.Circle.get "fields";
+      shapeFields = result.get "Shape" "fields";
+      circleFields = result.get "Circle" "fields";
     in
     builtins.all (k: circleFields ? ${k}) (builtins.attrNames shapeFields);
 
-  # ─── Scoped relations: type vs value namespaces ─────────────────
+  # --- Scoped relations: type vs value namespaces -----------------
 
-  type-lookup-num = result.evaluated.root.get "typeKind" "Num";
-  type-lookup-circle = result.evaluated.root.get "typeKind" "Circle";
-  type-lookup-unknown = result.evaluated.root.get "typeKind" "Nonexistent";
-  env-bindings = result.nodes.env.rels.bindings;
+  type-lookup-num = result.get "root" "typeKind" "Num";
+  type-lookup-circle = result.get "root" "typeKind" "Circle";
+  type-lookup-unknown = result.get "root" "typeKind" "Nonexistent";
+  env-bindings = (result.node "env").decls.__bindings;
 
-  # ─── HOAG synthesis: generic instantiation (Vogt 1989) ──────────
+  # --- HOAG synthesis: generic instantiation (Vogt 1989) ----------
 
-  pair-exists = result.nodes ? "Pair<Num,String>";
-  pair-fields = result.nodes."Pair<Num,String>".decls;
-  pair-type = result.nodes."Pair<Num,String>".type;
+  pair-exists = result.allNodes ? "Pair<Num,String>";
+  pair-fields = (result.node "Pair<Num,String>").decls;
+  pair-type = (result.node "Pair<Num,String>").type;
 
   all-records = builtins.sort builtins.lessThan (
     builtins.attrNames (engine.nodesByType result "record")
   );
 
-  # ─── Custom edge labels ─────────────────────────────────────────
+  # --- Custom edge labels ----------------------------------------
 
   r-edges = engine.followEdge "R" result "NamedPoint";
   e-edges = engine.followEdge "E" result "Circle";
   no-e-on-record = engine.followEdge "E" result "Point2D";
 
-  # ─── Ambiguity ──────────────────────────────────────────────────
+  # --- Ambiguity --------------------------------------------------
 
   name-not-ambiguous = engine.ambiguous {
     dataFilter = n: n.decls.name or null;

@@ -21,7 +21,7 @@
 #   }
 #   module Cycle1 { import Cycle2 }
 #   module Cycle2 { import Cycle1 }
-{ engine }:
+{ engine, lib }:
 let
   # Parent edges encode lexical nesting.
   parentGraph = engine.overlays [
@@ -49,7 +49,7 @@ let
     (engine.edge "Cycle2" "Cycle1")
   ];
 
-  baseNodes = engine.buildNodes {
+  roots = engine.buildNodes {
     inherit parentGraph importGraph;
     decls = {
       root = { };
@@ -92,5 +92,5 @@ let
   };
 in
 {
-  inherit baseNodes;
+  inherit roots;
 }

@@ -9,9 +9,9 @@
     let
       lib = nixpkgs.lib;
       engine = gen-scope { inherit lib; };
-      inherit (import ./graph.nix { inherit engine; }) baseNodes;
-      attributes = import ./attributes.nix { inherit engine lib; };
-      result = engine.eval { inherit baseNodes attributes; };
+      inherit (import ./graph.nix { inherit engine; }) roots;
+      attributes = import ./attributes.nix { inherit engine lib roots; };
+      result = engine.eval { inherit roots attributes; };
     in
     {
       tests = import ./tests.nix { inherit engine lib result; };

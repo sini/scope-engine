@@ -14,13 +14,13 @@
     in
     {
 
-      # ═══════════════════════════════════════════════════════════════════
+      # ===================================================================
       # 1. ALGEBRAIC GRAPH CONSTRUCTION (Mokhov 2017)
       #
-      # Four primitives — empty, vertex, overlay, connect — form an
+      # Four primitives -- empty, vertex, overlay, connect -- form an
       # algebra where overlay is a commutative idempotent monoid and
       # connect distributes over overlay (Mokhov 2017 §3.1).
-      # ═══════════════════════════════════════════════════════════════════
+      # ===================================================================
 
       # 1a. Core primitives
       graphPrimitives =
@@ -32,7 +32,7 @@
         in
         {
           overlay-vertices = g1.vertices; # [ "a" "b" ]
-          overlay-edges = g1.edges; # [] — no edges from overlay
+          overlay-edges = g1.edges; # [] -- no edges from overlay
           connect-edges = g2.edges; # [ { from = "a"; to = "b"; } ]
         };
 
@@ -45,7 +45,7 @@
             "spoke2"
             "spoke3"
           ];
-          # path: sequential chain a → b → c → d
+          # path: sequential chain a -> b -> c -> d
           p = engine.path [
             "a"
             "b"
@@ -58,7 +58,7 @@
             "y"
             "z"
           ];
-          # clique: fully connected — n vertices, n*(n-1)/2 edges
+          # clique: fully connected -- n vertices, n*(n-1)/2 edges
           k = engine.clique [
             "1"
             "2"
@@ -133,7 +133,7 @@
           overlays-vertex-count = builtins.length (lib.unique o.vertices); # 4
         };
 
-      # 1c. Transformations (Mokhov 2017 §5.2–5.5)
+      # 1c. Transformations (Mokhov 2017 §5.2-5.5)
       graphTransformations =
         let
           g = engine.path [
@@ -161,13 +161,13 @@
           remove-edge-drops-ab = !(engine.hasEdge "a" "b" snipped); # true
         };
 
-      # ═══════════════════════════════════════════════════════════════════
+      # ===================================================================
       # 2. SCOPE GRAPH CONSTRUCTION (Neron 2015 §2, Mokhov 2017 §7)
       #
       # Scope graphs model name resolution. Parent (P) edges encode
       # lexical nesting, import (I) edges encode cross-scope visibility.
       # buildNodes constructs a flat indexed node map from algebraic graphs.
-      # ═══════════════════════════════════════════════════════════════════
+      # ===================================================================
 
       scopeGraphBasic =
         let
@@ -224,23 +224,25 @@
         {
           # Parent edges create tree structure
           lab-parent = nodes."lab:types".parent; # "dept:pl"
-          cs-children = builtins.sort builtins.lessThan nodes."faculty:cs".childrenIds;
-          # → [ "dept:pl" "dept:systems" ]
+          cs-children = builtins.sort builtins.lessThan (
+            builtins.attrNames (lib.filterAttrs (_: n: n.parent == "faculty:cs") nodes)
+          );
+          # -> [ "dept:pl" "dept:systems" ]
 
-          # Import edges create cross-scope links
-          pl-imports = nodes."dept:pl".imports; # [ "faculty:math" ]
+          # Import edges stored in decls.__edges.I
+          pl-imports = nodes."dept:pl".decls.__edges.I or [ ]; # [ "faculty:math" ]
 
           # Types tag nodes for typed queries
           lab-type = nodes."lab:types".type; # "lab"
 
           # Node fields
-          pl-decls = nodes."dept:pl".decls; # { focus = "scope graphs"; }
+          pl-decls = builtins.removeAttrs nodes."dept:pl".decls [ "__edges" ]; # { focus = "scope graphs"; }
           pl-id = nodes."dept:pl".id; # "dept:pl"
         };
 
-      # ═══════════════════════════════════════════════════════════════════
+      # ===================================================================
       # 3. STRUCTURAL QUERIES (safe during HOAG synthesis)
-      # ═══════════════════════════════════════════════════════════════════
+      # ===================================================================
 
       structuralQueries =
         let
@@ -267,8 +269,11 @@
             };
           };
           result = engine.eval {
-            baseNodes = nodes;
-            attributes = { };
+            roots = nodes;
+            attributes = {
+              children = _self: id: lib.filterAttrs (_: n: n.parent == id) nodes;
+              imports = _self: _id: [ ];
+            };
           };
         in
         {
@@ -277,7 +282,7 @@
           ancestors = engine.ancestors result "a1x"; # [ "a1" "a" "root" ]
           siblings = engine.siblings result "a1"; # [ "a2" ]
           descendants = builtins.sort builtins.lessThan (engine.descendants result "root");
-          # → [ "a" "a1" "a1x" "a2" "b" ]
+          # -> [ "a" "a1" "a1x" "a2" "b" ]
 
           # Boolean predicates
           is-ancestor = engine.isAncestor result "root" "a1x"; # true
@@ -286,16 +291,16 @@
 
           # Typed queries
           teams = builtins.sort builtins.lessThan (builtins.attrNames (engine.nodesByType result "team"));
-          # → [ "a" "b" ]
+          # -> [ "a" "b" ]
         };
 
-      # ═══════════════════════════════════════════════════════════════════
-      # 4. NAME RESOLUTION (Neron 2015 §2.3–2.4, §5)
+      # ===================================================================
+      # 4. NAME RESOLUTION (Neron 2015 §2.3-2.4, §5)
       #
       # Resolution follows specificity ordering D < I < P:
       # local declarations beat imports, imports beat parent scope.
       # Well-formedness P*.I* prevents parent-walking after imports.
-      # ═══════════════════════════════════════════════════════════════════
+      # ===================================================================
 
       nameResolution =
         let
@@ -318,8 +323,11 @@
             };
           };
           result = engine.eval {
-            baseNodes = nodes;
-            attributes = { };
+            roots = nodes;
+            attributes = {
+              children = _self: id: lib.filterAttrs (_: n: n.parent == id) nodes;
+              imports = _self: id: (_self.node id).decls.__edges.I or [ ];
+            };
           };
         in
         {
@@ -334,51 +342,41 @@
                 a = 99;
                 c = 3;
               };
-          # → { a = 1; b = 2; c = 3; }
+          # -> { a = 1; b = 2; c = 3; }
 
           # resolve: specificity ordering D < I < P
           resolve-local-wins = engine.resolve {
             local = "local";
             imported = "imported";
             inherited = "inherited";
-          }; # → "local"
+          }; # -> "local"
 
           # query: generalized combinator (van Antwerpen §2.1)
           # inner has local color=green, import color=red, parent color=blue
           # D < I means local green wins
           query-inner-color = engine.query {
             dataFilter = n: n.decls.color or null;
-          } result "inner"; # → "green"
+          } result "inner"; # -> "green"
 
           # deep has no local color, no imports, walks parent to inner (green)
           query-deep-inherits = engine.query {
             dataFilter = n: n.decls.color or null;
-          } result "deep"; # → "green"
+          } result "deep"; # -> "green"
 
-          # I-only: skip parent walk
-          query-i-only = engine.query {
+          # Import-only query: tool comes from import (lib has tool)
+          query-import-tool = engine.query {
             dataFilter = n: n.decls.tool or null;
-            labelWF = "I";
-          } result "inner"; # → "hammer"
-
-          # P-only: skip imports (local still wins over parent)
-          query-p-only = engine.query {
-            dataFilter = n: n.decls.color or null;
-            labelWF = "P";
-          } result "inner"; # → "green" (inner has local color, beats parent)
+          } result "inner"; # -> "hammer"
 
           # inherit': walks parent chain (Neron §2.3)
           inherit-size = engine.inherit' {
             resolve = n: n.decls.size or null;
-          } result "deep"; # → "large" (deep → inner → outer)
+          } result "deep"; # -> "large" (deep -> inner -> outer)
         };
 
-      # ═══════════════════════════════════════════════════════════════════
+      # ===================================================================
       # 5. REACHABILITY AND AMBIGUITY (Neron 2015 §2.3, van Antwerpen 2018)
-      #
-      # queryAll returns ALL reachable declarations without shadowing.
-      # ambiguous detects when multiple non-shadowing declarations exist.
-      # ═══════════════════════════════════════════════════════════════════
+      # ===================================================================
 
       ambiguityDetection =
         let
@@ -398,41 +396,35 @@
             };
           };
           result = engine.eval {
-            baseNodes = nodes;
-            attributes = { };
+            roots = nodes;
+            attributes = {
+              children = _self: id: lib.filterAttrs (_: n: n.parent == id) nodes;
+              imports = _self: id: (_self.node id).decls.__edges.I or [ ];
+            };
           };
         in
         {
-          # queryAll: all reachable results (Neron §2.3, rule R)
           all-reachable = builtins.sort builtins.lessThan (
             engine.queryAll {
               dataFilter = n: n.decls.name or null;
             } result "scope"
           );
-          # → [ "from-import" "from-local" "from-parent" ]
 
-          # ambiguous: more than one reachable = ambiguous
           is-ambiguous = engine.ambiguous {
             dataFilter = n: n.decls.name or null;
-          } result "scope"; # → true
+          } result "scope"; # -> true
 
-          # Not ambiguous when only one source
           not-ambiguous = engine.ambiguous {
             dataFilter = n: n.decls.name or null;
-          } result "parent"; # → false
+          } result "parent"; # -> false
         };
 
-      # ═══════════════════════════════════════════════════════════════════
+      # ===================================================================
       # 6. VISIBILITY POLICIES (Neron 2015 §2.5, van Antwerpen 2018 §2.1)
-      #
-      # Default: D < I < P (local shadows import shadows parent).
-      # SML-style includes: drop D < I so includes don't shadow.
-      # Transitive imports: follow P*.I* instead of P*.I?
-      # ═══════════════════════════════════════════════════════════════════
+      # ===================================================================
 
       visibilityPolicies =
         let
-          # Module system: A imports B, B imports C
           nodes = engine.buildNodes {
             parentGraph = engine.vertices [
               "modA"
@@ -455,46 +447,40 @@
             };
           };
           result = engine.eval {
-            baseNodes = nodes;
-            attributes = { };
+            roots = nodes;
+            attributes = {
+              children = _self: id: lib.filterAttrs (_: n: n.parent == id) nodes;
+              imports = _self: id: (_self.node id).decls.__edges.I or [ ];
+            };
           };
         in
         {
-          # Default (non-transitive): A sees B only, not C
           non-transitive = engine.query {
             dataFilter = n: n.decls.z or null;
-          } result "modA"; # → null (C not visible)
+          } result "modA";
 
-          # Transitive imports (Neron §2.5, P*.I*): A sees through B into C
           transitive = engine.query {
             dataFilter = n: n.decls.z or null;
             transitiveImports = true;
-          } result "modA"; # → "deep-C"
+          } result "modA";
 
-          # Direct import shadows transitive
           transitive-shadowing = engine.query {
             dataFilter = n: n.decls.y or null;
             transitiveImports = true;
-          } result "modA"; # → "from-B" (B's y shadows C's y)
+          } result "modA";
 
-          # SML include: local doesn't shadow import
           include-semantics = engine.query {
             dataFilter = n: n.decls.x or null;
             localShadowsImport = false;
-          } result "modA"; # → "from-B" (import wins over local)
+          } result "modA";
         };
 
-      # ═══════════════════════════════════════════════════════════════════
+      # ===================================================================
       # 7. SEEN-IMPORTS: CYCLE PREVENTION (Neron 2015 §2.4, rule X)
-      #
-      # The resolution calculus tracks a set I of "seen imports" to
-      # prevent an import from being used in its own resolution.
-      # Without this, cyclic imports would diverge.
-      # ═══════════════════════════════════════════════════════════════════
+      # ===================================================================
 
       seenImports =
         let
-          # Mutual imports: A imports B, B imports A
           nodes = engine.buildNodes {
             parentGraph = engine.vertices [
               "a"
@@ -511,28 +497,26 @@
             };
           };
           result = engine.eval {
-            baseNodes = nodes;
-            attributes = { };
+            roots = nodes;
+            attributes = {
+              children = _self: id: lib.filterAttrs (_: n: n.parent == id) nodes;
+              imports = _self: id: (_self.node id).decls.__edges.I or [ ];
+            };
           };
         in
         {
-          # Does not diverge — seen-imports prevents the cycle
           a-resolves = engine.query {
             dataFilter = n: n.decls.val or null;
-          } result "a"; # → "from-a" (local wins, but import doesn't loop)
+          } result "a";
 
           b-resolves = engine.query {
             dataFilter = n: n.decls.val or null;
-          } result "b"; # → "from-b"
+          } result "b";
         };
 
-      # ═══════════════════════════════════════════════════════════════════
+      # ===================================================================
       # 8. DEMAND-DRIVEN EVALUATION (Mokhov 2018, Sloane 2009/2010)
-      #
-      # Nix IS the demand-driven evaluator. Attributes expressed as lazy
-      # functions over lib.fix get scheduling, memoization, and cycle
-      # detection from the runtime — no custom evaluator needed.
-      # ═══════════════════════════════════════════════════════════════════
+      # ===================================================================
 
       demandDrivenEval =
         let
@@ -571,6 +555,9 @@
           };
 
           attributes = {
+            children = _self: id: lib.filterAttrs (_: n: n.parent == id) nodes;
+            imports = _self: _id: [ ];
+
             # Inherited: flows top-down via parent chain (Knuth 1968)
             location = engine.inherit' {
               resolve = n: n.decls.location or null;
@@ -580,11 +567,10 @@
             headcount =
               self: id:
               let
-                node = self.nodes.${id};
+                node = self.node id;
                 local = node.decls.size or 0;
-                childTotal = lib.foldl' (
-                  acc: cid: acc + (self.evaluated.${cid}.get "headcount")
-                ) 0 node.childrenIds;
+                childIds = builtins.attrNames (self.get id "children");
+                childTotal = lib.foldl' (acc: cid: acc + (self.get cid "headcount")) 0 childIds;
               in
               local + childTotal;
 
@@ -592,49 +578,34 @@
             configFor = engine.paramAttr (
               self: id: param:
               let
-                node = self.nodes.${id};
+                node = self.node id;
               in
               node.decls.${param}
-                or (if node.parent != null then self.evaluated.${node.parent}.get "configFor" param else null)
+                or (if node.parent != null then self.get node.parent "configFor" param else null)
             );
           };
 
-          result = engine.eval {
-            inherit
-              (engine.buildNodes {
-                inherit parentGraph;
-                decls = nodes // { };
-              })
-              ;
-            baseNodes = nodes;
-            inherit attributes;
-          };
-          # Simpler:
           r = engine.eval {
-            baseNodes = nodes;
+            roots = nodes;
             inherit attributes;
           };
         in
         {
           # Inherited attribute: location flows from company to all descendants
-          infra-location = r.evaluated.infra.get "location"; # → "SF"
-          platform-location = r.evaluated.platform.get "location"; # → "SF"
+          infra-location = r.get "infra" "location"; # -> "SF"
+          platform-location = r.get "platform" "location"; # -> "SF"
 
           # Synthesized attribute: headcount aggregates bottom-up
-          eng-headcount = r.evaluated.eng.get "headcount"; # → 16 (8+5+3)
-          company-headcount = r.evaluated.company.get "headcount"; # → 16
+          eng-headcount = r.get "eng" "headcount"; # -> 16 (8+5+3)
+          company-headcount = r.get "company" "headcount"; # -> 16
 
           # Parameterized attribute: lookup by key
-          infra-budget = r.evaluated.infra.get "configFor" "budget"; # → 1000000
+          infra-budget = r.get "infra" "configFor" "budget"; # -> 1000000
         };
 
-      # ═══════════════════════════════════════════════════════════════════
+      # ===================================================================
       # 9. HOAG: DYNAMIC NODE SYNTHESIS (Vogt 1989)
-      #
-      # Higher-Order AGs treat tree structure as a computable attribute.
-      # synthesize inspects the graph and returns new nodes. The monotone-
-      # add invariant guarantees convergence: new nodes only, no overwrites.
-      # ═══════════════════════════════════════════════════════════════════
+      # ===================================================================
 
       hoagSynthesis =
         let
@@ -665,62 +636,50 @@
             };
           };
 
-          # Synthesize: create audit scopes for departments over budget threshold
-          synthesize =
-            self:
-            let
-              depts = lib.filterAttrs (id: _: lib.hasPrefix "dept:" id) self.nodes;
-            in
-            lib.concatMapAttrs (
-              id: node:
-              if (node.decls.budget or 0) > 150000 then
-                {
-                  "audit:${id}" = {
-                    inherit id;
-                    parent = id;
-                    decls = {
-                      reviewer = "finance";
-                      threshold = 150000;
-                    };
-                    imports = [ ];
-                    childrenIds = [ ];
-                    type = "audit";
-                    edgesByLabel = { };
-                    rels = { };
-                  };
-                }
-              else
-                { }
-            ) depts;
-
           result = engine.eval {
-            baseNodes = nodes;
-            inherit synthesize;
-            attributes = { };
+            roots = nodes;
+            attributes = {
+              children =
+                _self: id:
+                let
+                  staticChildren = lib.filterAttrs (_: n: n.parent == id) nodes;
+                  # Synthesize audit nodes for departments over budget threshold
+                  audit = lib.optionalAttrs (lib.hasPrefix "dept:" id && (nodes.${id}.decls.budget or 0) > 150000) {
+                    "audit:${id}" = {
+                      id = "audit:${id}";
+                      type = "audit";
+                      parent = id;
+                      decls = {
+                        reviewer = "finance";
+                        threshold = 150000;
+                      };
+                    };
+                  };
+                in
+                staticChildren // audit;
+              imports = _self: _id: [ ];
+            };
           };
         in
         {
           # Synthesized nodes exist for departments over threshold
-          has-eng-audit = result.nodes ? "audit:dept:eng"; # true (500k > 150k)
-          has-sales-audit = result.nodes ? "audit:dept:sales"; # true (200k > 150k)
-          no-hr-audit = !(result.nodes ? "audit:dept:hr"); # true (100k < 150k)
+          has-eng-audit = result.allNodes ? "audit:dept:eng"; # true (500k > 150k)
+          has-sales-audit = result.allNodes ? "audit:dept:sales"; # true (200k > 150k)
+          no-hr-audit = !(result.allNodes ? "audit:dept:hr"); # true (100k < 150k)
 
           # Synthesized node data
-          audit-reviewer = result.nodes."audit:dept:eng".decls.reviewer; # "finance"
+          audit-reviewer = (result.node "audit:dept:eng").decls.reviewer; # "finance"
 
           # Base nodes protected from overwrite (monotone-add invariant)
-          eng-budget = result.nodes."dept:eng".decls.budget; # 500000 (unchanged)
+          eng-budget = (result.node "dept:eng").decls.budget; # 500000 (unchanged)
 
           # Typed query finds synthesized nodes
           audit-count = builtins.length (builtins.attrNames (engine.nodesByType result "audit")); # 2
         };
 
-      # ═══════════════════════════════════════════════════════════════════
+      # ===================================================================
       # 10. CIRCULAR ATTRIBUTES (Sloane 2010 §2.2, Magnusson & Hedin)
-      #
-      # Fixed-point iteration from an initial value. Used for data-flow
-      # computations where an attribute depends on itself.
-      # ═══════════════════════════════════════════════════════════════════
+      # ===================================================================
 
       circularAttributes =
         let
@@ -733,14 +692,14 @@
             };
           };
           result = engine.eval {
-            baseNodes = nodes;
+            roots = nodes;
             attributes = {
-              # Simulate iterative optimization: start at 0, gain 30% per step.
-              # Converges in ~15 iterations with integer math.
+              children = _self: _id: { };
+              imports = _self: _id: [ ];
               accuracy = engine.circular { init = 0; } (
                 self: id: prev:
                 let
-                  target = self.nodes.${id}.decls.target-accuracy;
+                  target = (self.node id).decls.target-accuracy;
                 in
                 if prev >= target then
                   prev
@@ -754,16 +713,12 @@
           };
         in
         {
-          converged = result.evaluated.system.get "accuracy"; # → 95
+          converged = result.get "system" "accuracy"; # -> 95
         };
 
-      # ═══════════════════════════════════════════════════════════════════
+      # ===================================================================
       # 11. IMPORT-SCOPED COLLECTION (Neron 2015 §2.4, rule I)
-      #
-      # collectImports traverses only imported scopes — demand-driven,
-      # not global. A node's cross-scope data comes from its import
-      # edges, not from iterating all nodes.
-      # ═══════════════════════════════════════════════════════════════════
+      # ===================================================================
 
       importCollection =
         let
@@ -791,24 +746,22 @@
             };
           };
           result = engine.eval {
-            baseNodes = nodes;
+            roots = nodes;
             attributes = {
-              available-fns = engine.collectImports (self: importId: self.nodes.${importId}.decls.exports or [ ]);
+              children = _self: id: lib.filterAttrs (_: n: n.parent == id) nodes;
+              imports = _self: id: (_self.node id).decls.__edges.I or [ ];
+              available-fns = engine.collectImports (self: importId: (self.node importId).decls.exports or [ ]);
             };
           };
         in
         {
-          app-fns = result.evaluated.app.get "available-fns";
-          # → [ "format" "validate" "sum" "avg" ]
+          app-fns = result.get "app" "available-fns";
+          # -> [ "format" "validate" "sum" "avg" ]
         };
 
-      # ═══════════════════════════════════════════════════════════════════
+      # ===================================================================
       # 12. STRUCTURAL SUBTYPING (van Antwerpen 2018 §2.3)
-      #
-      # Check if scope A's declarations are a subset of scope B's.
-      # Every key in A must exist in B. Optional eq function for
-      # value-level comparison.
-      # ═══════════════════════════════════════════════════════════════════
+      # ===================================================================
 
       structuralSubtyping =
         let
@@ -836,18 +789,17 @@
             };
           };
           result = engine.eval {
-            baseNodes = nodes;
-            attributes = { };
+            roots = nodes;
+            attributes = {
+              children = _self: id: lib.filterAttrs (_: n: n.parent == id) nodes;
+              imports = _self: _id: [ ];
+            };
           };
         in
         {
-          # point2d <: point3d (2d's keys are subset of 3d's)
           is-subtype = engine.subtypeOf { } result "point2d" "point3d"; # true
-          # point3d is NOT <: point2d (z missing)
           not-subtype = engine.subtypeOf { } result "point3d" "point2d"; # false
-          # color is NOT <: point3d (different keys)
           different = engine.subtypeOf { } result "color" "point3d"; # false
-          # With value equality check
           value-eq = engine.subtypeOf {
             eq =
               _k: a: b:
@@ -855,13 +807,9 @@
           } result "point2d" "point3d"; # true (x and y types match)
         };
 
-      # ═══════════════════════════════════════════════════════════════════
+      # ===================================================================
       # 13. CUSTOM EDGE LABELS (van Antwerpen 2018 §2.1)
-      #
-      # Beyond P (parent) and I (import), arbitrary labeled edges model
-      # domain-specific relationships: R (record fields), E (extension/
-      # inheritance), or any label the consumer defines.
-      # ═══════════════════════════════════════════════════════════════════
+      # ===================================================================
 
       customEdgeLabels =
         let
@@ -895,32 +843,34 @@
             };
           };
           result = engine.eval {
-            baseNodes = nodes;
-            attributes = { };
+            roots = nodes;
+            attributes = {
+              children = _self: id: lib.filterAttrs (_: n: n.parent == id) nodes;
+              imports = _self: _id: [ ];
+              "edges-R" = _self: id: (_self.node id).decls.__edges.R or [ ];
+              "edges-E" = _self: id: (_self.node id).decls.__edges.E or [ ];
+            };
           };
         in
         {
           # followEdge: get targets for a custom label
           record-extends = engine.followEdge "R" result "extRecord";
-          # → [ "baseRecord" ]
+          # -> [ "baseRecord" ]
 
           # collectByLabel: gather data from custom-labeled edges
           inherited-methods = engine.collectByLabel "E" (
-            self: id: builtins.attrNames self.nodes.${id}.decls
+            self: id: builtins.attrNames (builtins.removeAttrs (self.node id).decls [ "__edges" ])
           ) result "classB";
-          # → [ "method-foo" ]
+          # -> [ "method-foo" ]
 
-          # edgesByLabel: all labeled edges from a node
-          all-edges = result.nodes.extRecord.edgesByLabel;
-          # → { R = [ "baseRecord" ]; }
+          # Edge data from decls.__edges
+          all-edges = (result.node "extRecord").decls.__edges;
+          # -> { R = [ "baseRecord" ]; }
         };
 
-      # ═══════════════════════════════════════════════════════════════════
+      # ===================================================================
       # 14. SCOPED RELATIONS (van Antwerpen 2018 §2.1)
-      #
-      # Multiple named relations per scope — type declarations and value
-      # declarations live in separate namespaces, accessed via node.rels.
-      # ═══════════════════════════════════════════════════════════════════
+      # ===================================================================
 
       scopedRelations =
         let
@@ -929,53 +879,48 @@
             decls = {
               outer = {
                 x = 42;
-              };
-              inner = { };
-            };
-            relations = {
-              outer = {
-                typeRel = {
+                __typeRel = {
                   x = "Int";
                   y = "String";
                 };
-                docRel = {
+                __docRel = {
                   x = "The x coordinate";
                 };
               };
+              inner = { };
             };
           };
           result = engine.eval {
-            baseNodes = nodes;
-            attributes = { };
+            roots = nodes;
+            attributes = {
+              children = _self: id: lib.filterAttrs (_: n: n.parent == id) nodes;
+              imports = _self: _id: [ ];
+            };
           };
         in
         {
           # Value namespace (via decls)
           value-x = engine.query {
             dataFilter = n: n.decls.x or null;
-          } result "inner"; # → 42
+          } result "inner"; # -> 42
 
-          # Type namespace (via rels)
+          # Type namespace (via decls.__typeRel)
           type-x = engine.query {
-            dataFilter = n: (n.rels.typeRel or { }).x or null;
-          } result "inner"; # → "Int"
+            dataFilter = n: (n.decls.__typeRel or { }).x or null;
+          } result "inner"; # -> "Int"
 
           # Doc namespace
           doc-x = engine.query {
-            dataFilter = n: (n.rels.docRel or { }).x or null;
-          } result "inner"; # → "The x coordinate"
+            dataFilter = n: (n.decls.__docRel or { }).x or null;
+          } result "inner"; # -> "The x coordinate"
 
-          # rels includes decls as the ":" relation
-          decl-via-rels = result.nodes.outer.rels.":".x; # → 42
+          # Direct decl access
+          decl-via-node = (result.node "outer").decls.x; # -> 42
         };
 
-      # ═══════════════════════════════════════════════════════════════════
+      # ===================================================================
       # 15. EVAL DEBUG: CYCLE TRACING (spec Open Question #2/#5)
-      #
-      # evalDebug threads a visited-set through self so cycles produce
-      # structured traces instead of Nix's opaque "infinite recursion."
-      # Same attribute signatures — use for diagnosing, eval for production.
-      # ═══════════════════════════════════════════════════════════════════
+      # ===================================================================
 
       evalDebugDemo =
         let
@@ -989,30 +934,30 @@
 
           # Intentionally cyclic: a.ping reads b.ping, b.ping reads a.ping
           result = engine.evalDebug {
-            baseNodes = nodes;
+            roots = nodes;
             attributes = {
+              children = _self: _id: { };
+              imports = _self: id: (_self.node id).decls.__edges.I or [ ];
               ping =
                 self: id:
                 let
-                  other = builtins.head self.nodes.${id}.imports;
+                  other = builtins.head (self.get id "imports");
                 in
-                self.evaluated.${other}.get "ping";
+                self.get other "ping";
             };
           };
 
-          # Try to evaluate — will throw with structured cycle trace
-          tried = builtins.tryEval (result.evaluated.a.get "ping");
+          # Try to evaluate -- will throw with structured cycle trace
+          tried = builtins.tryEval (result.get "a" "ping");
         in
         {
           # The cycle is caught with a structured error, not infinite recursion
-          cycle-caught = !tried.success; # → true
-          # Error message would be:
-          # "gen-scope: cycle detected: a.ping -> b.ping -> a.ping"
+          cycle-caught = !tried.success; # -> true
         };
 
-      # ═══════════════════════════════════════════════════════════════════
+      # ===================================================================
       # 16. GLOBAL COLLECTION AND TYPED QUERIES
-      # ═══════════════════════════════════════════════════════════════════
+      # ===================================================================
 
       globalCollection =
         let
@@ -1042,20 +987,23 @@
             };
           };
           result = engine.eval {
-            baseNodes = nodes;
-            attributes = { };
+            roots = nodes;
+            attributes = {
+              children = _self: id: lib.filterAttrs (_: n: n.parent == id) nodes;
+              imports = _self: _id: [ ];
+            };
           };
         in
         {
-          # collect: iterate all nodes (global — use sparingly)
+          # collect: iterate all nodes (global -- use sparingly)
           all-sizes = builtins.sort builtins.lessThan (
-            engine.collect { } (self: id: [ (self.nodes.${id}.decls.size or 0) ]) result
-          ); # → [ 0 3 5 8 ]
+            engine.collect { } (self: id: [ ((self.node id).decls.size or 0) ]) result
+          ); # -> [ 0 3 5 8 ]
 
           # collectByType: filter by type tag
           team-sizes = builtins.sort builtins.lessThan (
-            engine.collectByType "team" (self: id: [ self.nodes.${id}.decls.size ]) result
-          ); # → [ 3 5 8 ]
+            engine.collectByType "team" (self: id: [ (self.node id).decls.size ]) result
+          ); # -> [ 3 5 8 ]
         };
     };
 }

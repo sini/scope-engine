@@ -11,21 +11,20 @@
   effectiveFlags =
     self: id:
     let
-      node = self.nodes.${id};
-      parentFlags =
-        if node.parent != null then self.evaluated.${node.parent}.get "effectiveFlags" else { };
+      node = self.node id;
+      parentFlags = if node.parent != null then self.get node.parent "effectiveFlags" else { };
     in
-    engine.shadow node.decls parentFlags;
+    engine.shadow (builtins.removeAttrs node.decls [ "__edges" ]) parentFlags;
 
   flagWithDeps = engine.paramAttr (
     self: id: flagName:
     let
-      raw = self.evaluated.${id}.get "flag" flagName;
+      raw = self.get id "flag" flagName;
       deps = {
         ai-assist = [ "new-editor" ];
       };
       flagDeps = deps.${flagName} or [ ];
-      allDepsMet = builtins.all (dep: self.evaluated.${id}.get "flag" dep == true) flagDeps;
+      allDepsMet = builtins.all (dep: self.get id "flag" dep == true) flagDeps;
     in
     if flagDeps == [ ] then raw else raw && allDepsMet
   );
@@ -33,11 +32,13 @@
   overrideCount =
     self: id:
     let
-      effective = self.evaluated.${id}.get "effectiveFlags";
-      defaults = self.nodes.global.decls;
+      effective = self.get id "effectiveFlags";
+      defaults = (self.node "global").decls;
     in
     builtins.length (
-      builtins.filter (key: effective.${key} != (defaults.${key} or null)) (builtins.attrNames defaults)
+      builtins.filter (key: key != "__edges" && effective.${key} != (defaults.${key} or null)) (
+        builtins.filter (k: k != "__edges") (builtins.attrNames defaults)
+      )
     );
 
   # Circular attribute: rollout convergence (Sloane 2010 §2.2).

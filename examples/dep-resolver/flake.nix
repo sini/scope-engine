@@ -9,10 +9,13 @@
     let
       lib = nixpkgs.lib;
       engine = gen-scope { inherit lib; };
-      graph = import ./graph.nix { inherit engine; };
+      graph = import ./graph.nix { inherit engine lib; };
       attributes = import ./attributes.nix { inherit engine lib; };
-      inherit (graph) baseNodes synthesize;
-      result = engine.eval { inherit baseNodes attributes synthesize; };
+      inherit (graph) roots;
+      result = engine.eval {
+        inherit roots;
+        attributes = graph.mkAttributes roots attributes;
+      };
     in
     {
       tests = import ./tests.nix {
@@ -20,9 +23,9 @@
           engine
           lib
           result
-          baseNodes
-          attributes
+          roots
           ;
+        attributes = graph.mkAttributes roots attributes;
       };
     };
 }

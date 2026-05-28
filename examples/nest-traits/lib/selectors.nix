@@ -58,11 +58,35 @@ let
     nodeMap: node: allNodes:
     let
       findNode = id: firstMatch (n: n.__path == id) allNodes;
-      cids = engine.childrenIds { nodes = nodeMap; } node.__path;
+      # Compute children/ancestors/siblings directly from nodeMap
+      cids = builtins.attrNames (lib.filterAttrs (_: n: n.parent == node.__path) nodeMap);
       children = map findNode cids;
-      ancestorIds = engine.ancestors { nodes = nodeMap; } node.__path;
+      ancestorIds =
+        let
+          go =
+            visited: nid:
+            let
+              p = (nodeMap.${nid} or { parent = null; }).parent;
+            in
+            if p == null then
+              [ ]
+            else if visited ? ${p} then
+              [ ]
+            else
+              [ p ] ++ go (visited // { ${p} = true; }) p;
+        in
+        go { ${node.__path} = true; } node.__path;
       ancestors = map findNode ancestorIds;
-      siblingIds = engine.siblings { nodes = nodeMap; } node.__path;
+      siblingIds =
+        let
+          p = (nodeMap.${node.__path} or { parent = null; }).parent;
+        in
+        if p == null then
+          [ ]
+        else
+          builtins.filter (cid: cid != node.__path) (
+            builtins.attrNames (lib.filterAttrs (_: n: n.parent == p) nodeMap)
+          );
       siblings = map findNode siblingIds;
       parentNode = if ancestors == [ ] then null else builtins.head ancestors;
       matchN = n: sel: matchesOne n sel (mkCtxFromGraph nodeMap n allNodes);

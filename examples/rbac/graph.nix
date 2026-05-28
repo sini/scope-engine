@@ -1,27 +1,27 @@
 # RBAC scope graph.
 #
 # Role hierarchy:
-#   viewer → can: read
-#   editor → inherits viewer, can: read, write
-#   admin  → inherits editor, can: read, write, delete, manage
-#   auditor → inherits viewer, can: read, audit (parallel hierarchy)
+#   viewer -> can: read
+#   editor -> inherits viewer, can: read, write
+#   admin  -> inherits editor, can: read, write, delete, manage
+#   auditor -> inherits viewer, can: read, audit (parallel hierarchy)
 #
 # Users:
-#   alice → admin
-#   bob   → editor + auditor (multiple roles)
-#   carol → viewer
-#   dave  → editor, but DENIED delete on project-x
+#   alice -> admin
+#   bob   -> editor + auditor (multiple roles)
+#   carol -> viewer
+#   dave  -> editor, but DENIED delete on project-x
 #
 # Resources:
 #   org/
-#   ├── project-x/ (high sensitivity)
-#   │   ├── doc-1
-#   │   └── doc-2
-#   └── project-y/ (low sensitivity)
-#       └── doc-3
-{ engine }:
+#   +-- project-x/ (high sensitivity)
+#   |   +-- doc-1
+#   |   +-- doc-2
+#   +-- project-y/ (low sensitivity)
+#       +-- doc-3
+{ engine, lib }:
 {
-  baseNodes = engine.buildNodes {
+  roots = engine.buildNodes {
     # Resource hierarchy (parent edges)
     parentGraph = engine.overlays [
       (engine.star "org" [
@@ -41,7 +41,7 @@
         (engine.edge "admin" "editor")
         (engine.edge "auditor" "viewer")
       ];
-      # A = role assignment (user → role)
+      # A = role assignment (user -> role)
       A = engine.overlays [
         (engine.edge "alice" "admin")
         (engine.edge "bob" "editor")
@@ -49,7 +49,7 @@
         (engine.edge "carol" "viewer")
         (engine.edge "dave" "editor")
       ];
-      # D = deny override (user → resource)
+      # D = deny override (user -> resource)
       D = engine.edge "dave" "project-x";
     };
     decls = {
@@ -77,6 +77,12 @@
       };
       dave = {
         email = "dave@corp.com";
+        __deny = {
+          "project-x" = [
+            "delete"
+            "manage"
+          ];
+        };
       };
       org = {
         name = "Acme Corp";
@@ -114,16 +120,6 @@
       "doc-1" = "resource";
       "doc-2" = "resource";
       "doc-3" = "resource";
-    };
-    relations = {
-      dave = {
-        deny = {
-          "project-x" = [
-            "delete"
-            "manage"
-          ];
-        };
-      };
     };
   };
 }

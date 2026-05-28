@@ -25,45 +25,45 @@
 
   alice-perms =
     let
-      p = result.evaluated.alice.get "permissions";
+      p = result.get "alice" "permissions";
     in
     builtins.sort builtins.lessThan (builtins.attrNames p);
   bob-perms =
     let
-      p = result.evaluated.bob.get "permissions";
+      p = result.get "bob" "permissions";
     in
     builtins.sort builtins.lessThan (builtins.attrNames p);
   carol-perms =
     let
-      p = result.evaluated.carol.get "permissions";
+      p = result.get "carol" "permissions";
     in
     builtins.attrNames p;
 
-  alice-can-delete = result.evaluated.alice.get "hasPermission" "delete";
-  carol-cannot-write = result.evaluated.carol.get "hasPermission" "write";
-  bob-can-audit = result.evaluated.bob.get "hasPermission" "audit";
-  bob-cannot-manage = result.evaluated.bob.get "hasPermission" "manage";
+  alice-can-delete = result.get "alice" "hasPermission" "delete";
+  carol-cannot-write = result.get "carol" "hasPermission" "write";
+  bob-can-audit = result.get "bob" "hasPermission" "audit";
+  bob-cannot-manage = result.get "bob" "hasPermission" "manage";
 
-  dave-denied-delete = result.evaluated.dave.get "isDenied" {
+  dave-denied-delete = result.get "dave" "isDenied" {
     resource = "project-x";
     action = "delete";
   };
-  dave-not-denied-read = result.evaluated.dave.get "isDenied" {
+  dave-not-denied-read = result.get "dave" "isDenied" {
     resource = "project-x";
     action = "read";
   };
-  dave-can-read-project-x = result.evaluated.dave.get "canAccess" {
+  dave-can-read-project-x = result.get "dave" "canAccess" {
     resource = "project-x";
     action = "read";
   };
-  dave-cannot-manage-project-x = result.evaluated.dave.get "canAccess" {
+  dave-cannot-manage-project-x = result.get "dave" "canAccess" {
     resource = "project-x";
     action = "manage";
   };
 
-  doc1-sensitivity = result.evaluated."doc-1".get "sensitivity";
-  doc3-sensitivity = result.evaluated."doc-3".get "sensitivity";
-  org-sensitivity = result.evaluated.org.get "sensitivity";
+  doc1-sensitivity = result.get "doc-1" "sensitivity";
+  doc3-sensitivity = result.get "doc-3" "sensitivity";
+  org-sensitivity = result.get "org" "sensitivity";
   project-x-docs = builtins.sort builtins.lessThan (engine.childrenIds result "project-x");
   doc1-ancestors = engine.ancestors result "doc-1";
 

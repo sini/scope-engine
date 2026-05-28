@@ -11,11 +11,11 @@
     let
       lib = nixpkgs.lib;
       engine = gen-scope { inherit lib; };
-      graph = import ./graph.nix { inherit engine; };
+      graph = import ./graph.nix { inherit engine lib; };
       attributes = import ./attributes.nix { inherit engine lib; };
       result = engine.eval {
-        inherit (graph) baseNodes synthesize;
-        inherit attributes;
+        inherit (graph) roots;
+        attributes = graph.mkAttributes graph.roots attributes;
       };
     in
     {

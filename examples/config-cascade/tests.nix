@@ -5,23 +5,23 @@
   result,
 }:
 {
-  test-db-host = result.evaluated."api.test".get "config" "DB_HOST";
-  test-log-level = result.evaluated."api.test".get "config" "LOG_LEVEL";
-  test-port = result.evaluated."api.test".get "config" "PORT";
-  staging-db = result.evaluated."api.staging".get "config" "DB_HOST";
-  staging-port = result.evaluated."api.staging".get "config" "PORT";
-  web-port = result.evaluated.web.get "config" "PORT";
-  web-log-level = result.evaluated.web.get "config" "LOG_LEVEL";
-  global-db-host = result.evaluated.global.get "config" "DB_HOST";
+  test-db-host = result.get "api.test" "config" "DB_HOST";
+  test-log-level = result.get "api.test" "config" "LOG_LEVEL";
+  test-port = result.get "api.test" "config" "PORT";
+  staging-db = result.get "api.staging" "config" "DB_HOST";
+  staging-port = result.get "api.staging" "config" "PORT";
+  web-port = result.get "web" "config" "PORT";
+  web-log-level = result.get "web" "config" "LOG_LEVEL";
+  global-db-host = result.get "global" "config" "DB_HOST";
 
-  api-cache-ttl = result.evaluated.api.get "config" "CACHE_TTL";
-  api-redis = result.evaluated.api.get "config" "REDIS_HOST";
-  test-cache-ttl = result.evaluated."api.test".get "config" "CACHE_TTL";
-  infra-no-cache = result.evaluated.infra.get "config" "CACHE_TTL";
+  api-cache-ttl = result.get "api" "config" "CACHE_TTL";
+  api-redis = result.get "api" "config" "REDIS_HOST";
+  test-cache-ttl = result.get "api.test" "config" "CACHE_TTL";
+  infra-no-cache = result.get "infra" "config" "CACHE_TTL";
 
   api-test-full-config =
     let
-      c = result.evaluated."api.test".get "resolvedConfig";
+      c = result.get "api.test" "resolvedConfig";
     in
     {
       DB_HOST = c.DB_HOST;
@@ -31,7 +31,7 @@
     };
   web-full-config =
     let
-      c = result.evaluated.web.get "resolvedConfig";
+      c = result.get "web" "resolvedConfig";
     in
     {
       PORT = c.PORT;
@@ -39,14 +39,12 @@
       DB_HOST = c.DB_HOST;
     };
 
-  test-overridden = builtins.sort builtins.lessThan (
-    result.evaluated."api.test".get "overriddenKeys"
-  );
-  global-no-overrides = result.evaluated.global.get "overriddenKeys";
+  test-overridden = builtins.sort builtins.lessThan (result.get "api.test" "overriddenKeys");
+  global-no-overrides = result.get "global" "overriddenKeys";
 
   test-config-sources =
     let
-      s = result.evaluated."api.test".get "configSources";
+      s = result.get "api.test" "configSources";
     in
     {
       db = s.DB_HOST;

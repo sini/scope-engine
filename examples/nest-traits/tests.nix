@@ -201,8 +201,9 @@
               };
             };
             graph = buildDomGraph nodes;
+            childIds = builtins.attrNames (lib.filterAttrs (_: n: n.parent == "igloo") graph);
           in
-          graph."igloo".childrenIds;
+          childIds;
         expected = [ "igloo.users.tux" ];
       };
     };
@@ -1532,8 +1533,6 @@
                   config.traits.web = { };
                   config.traits.api = { };
                   config.traits.server = {
-                    # server needs traits that have a sub-trait with nodeId
-                    # For now, test flat selector matching on attrs
                     needs = [
                       (nest.selectors.attrs { category = "frontend"; })
                     ];
@@ -1664,9 +1663,7 @@
       test-select-web-nodes = {
         expr =
           let
-            webNodes = graphLib.select nodes (
-              node: builtins.any (t: t.name == "web") (node.rels.":".is or [ ])
-            );
+            webNodes = graphLib.select nodes (node: builtins.any (t: t.name == "web") (node.decls.is or [ ]));
           in
           builtins.sort builtins.lessThan (builtins.attrNames webNodes);
         expected = [
@@ -1678,16 +1675,13 @@
       test-select-lb-node = {
         expr =
           let
-            lbNodes = graphLib.select nodes (node: builtins.any (t: t.name == "lb") (node.rels.":".is or [ ]));
+            lbNodes = graphLib.select nodes (node: builtins.any (t: t.name == "lb") (node.decls.is or [ ]));
           in
           builtins.attrNames lbNodes;
         expected = [ "prod.lb" ];
       };
 
       test-all-nodes-are-leaves = {
-        # DOM graph uses namespace folders (no `is`), so nodes at the same
-        # level have no parent edges between them. gen-graph's leaves/roots
-        # operate on import edges; with none present, all nodes are leaves.
         expr = builtins.sort builtins.lessThan (graphLib.leaves nodes);
         expected = [
           "prod.lb"
@@ -1702,7 +1696,6 @@
       };
 
       test-parent-edges-in-nested-dom = {
-        # Nested nodes (child inside parent with `is`) produce parent edges.
         expr =
           let
             userT = {
@@ -1729,8 +1722,6 @@
       };
 
       test-flat-dom-no-parent-edges = {
-        # Namespace folders don't create nodes, so sibling nodes under
-        # a namespace have no parent edges between them.
         expr =
           let
             edgeSet = graphLib.fromEdges nodes;
@@ -1740,8 +1731,6 @@
       };
 
       test-import-graph-reachable = {
-        # Construct a graph with import edges to demonstrate reachableFrom.
-        # lb imports web-1 and web-2 (lb depends on web backends).
         expr =
           let
             importNodes = engine.buildNodes {

@@ -22,11 +22,11 @@
             hosts
             ;
         })
-        baseNodes
+        roots
         ;
-      inherit (import ./attributes.nix { inherit engine lib; }) attributes;
-      result = engine.eval { inherit baseNodes attributes; };
-      resolveOn = host: user: result.evaluated."host:${host}".get "resolveUser" user;
+      inherit (import ./attributes.nix { inherit engine lib roots; }) attributes;
+      result = engine.eval { inherit roots attributes; };
+      resolveOn = host: user: result.get "host:${host}" "resolveUser" user;
     in
     {
       tests = import ./tests.nix {

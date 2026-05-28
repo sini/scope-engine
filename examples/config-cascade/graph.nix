@@ -17,7 +17,7 @@
 #       └── .env                  REGION=us-east-1
 { engine }:
 {
-  baseNodes = engine.buildNodes {
+  roots = engine.buildNodes {
     parentGraph = engine.overlays [
       (engine.star "global" [
         "apps"

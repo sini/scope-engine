@@ -1,5 +1,9 @@
 # ACL resolution attributes.
-{ engine, lib }:
+{
+  engine,
+  lib,
+  roots,
+}:
 let
   # Resolve all transitive group memberships for a group.
   # If you're in group X, you're also in everything X is a member of (via M edges).
@@ -13,16 +17,20 @@ let
 in
 {
   attributes = {
+    children = _self: id: lib.filterAttrs (_: n: n.parent == id) roots;
+    imports = _self: _id: [ ];
+    "edges-M" = _self: id: (_self.node id).decls.__edges.M or [ ];
+
     # Merged system-access-groups for a host:
     # unique(env.system-access-groups ++ host.system-access-groups)
     # Cannot use inherit' here because we MERGE levels, not shadow.
     effectiveGates =
       self: id:
       let
-        node = self.nodes.${id};
+        node = self.node id;
         hostGates = node.decls.system-access-groups or [ ];
         envGates =
-          if node.parent != null then self.nodes.${node.parent}.decls.system-access-groups or [ ] else [ ];
+          if node.parent != null then (self.node node.parent).decls.system-access-groups or [ ] else [ ];
       in
       lib.unique (envGates ++ hostGates);
 
@@ -30,26 +38,26 @@ in
     resolveUser = engine.paramAttr (
       self: hostId: userName:
       let
-        hostNode = self.nodes.${hostId};
+        hostNode = self.node hostId;
         envId = hostNode.parent;
-        envAccess = self.nodes.${envId}.decls.access or { };
+        envAccess = (self.node envId).decls.access or { };
         directGroups = envAccess.${userName} or [ ];
 
         allGroupIds = lib.unique (
           lib.concatMap (gname: transitiveGroups self "group:${gname}") directGroups
         );
-        allGroupNames = map (gid: self.nodes.${gid}.decls.name) (
-          builtins.filter (gid: self.nodes ? ${gid}) allGroupIds
+        allGroupNames = map (gid: (self.node gid).decls.name) (
+          builtins.filter (gid: roots ? ${gid}) allGroupIds
         );
 
-        byScope = scope: builtins.filter (gid: (self.nodes.${gid}.decls.scope or "") == scope) allGroupIds;
-        namesForScope = scope: map (gid: self.nodes.${gid}.decls.name) (byScope scope);
+        byScope = scope: builtins.filter (gid: ((self.node gid).decls.scope or "") == scope) allGroupIds;
+        namesForScope = scope: map (gid: (self.node gid).decls.name) (byScope scope);
 
         systemGroups = namesForScope "system";
         unixGroups = namesForScope "unix";
         kanidmGroups = namesForScope "kanidm";
 
-        gates = self.evaluated.${hostId}.get "effectiveGates";
+        gates = self.get hostId "effectiveGates";
         gateGroupIds = map (g: "group:${g}") gates;
         gateIntersection = builtins.filter (gid: builtins.elem gid gateGroupIds) (byScope "system");
         enable = gateIntersection != [ ];

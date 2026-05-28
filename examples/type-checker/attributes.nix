@@ -9,8 +9,8 @@ let
   allFields =
     self: id:
     let
-      node = self.nodes.${id};
-      local = node.decls;
+      node = self.node id;
+      local = builtins.removeAttrs node.decls [ "__edges" ];
       rFields = lib.foldl' (acc: rid: engine.shadow acc (allFields self rid)) { } (
         engine.followEdge "R" self id
       );
@@ -25,12 +25,12 @@ in
 
   fieldCount = self: id: builtins.length (builtins.attrNames (allFields self id));
 
-  # Type lookup in root's type namespace (scoped relations).
+  # Type lookup in root's type namespace (scoped relations stored in decls).
   typeKind = engine.paramAttr (
     self: _id: typeName:
     let
-      root = self.nodes.root;
+      root = self.node "root";
     in
-    (root.rels.typeDecl or { }).${typeName} or "unknown"
+    (root.decls.__typeDecl or { }).${typeName} or "unknown"
   );
 }

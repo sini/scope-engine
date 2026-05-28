@@ -20,7 +20,7 @@
 #   max-items      — global=50, project:alpha=100
 { engine, lib }:
 let
-  baseNodes = engine.buildNodes {
+  roots = engine.buildNodes {
     parentGraph = engine.overlays [
       (engine.star "global" [
         "org:acme"
@@ -79,34 +79,39 @@ let
     };
   };
 
-  # HOAG synthesis: rollout tracking nodes for beta-enabled orgs (Vogt 1989).
-  synthesize =
-    self:
+  # Build attributes with children that include synthesized rollout nodes
+  mkAttributes =
+    rootNodes: userAttrs:
     let
-      orgs = lib.filterAttrs (_: n: n.type == "org") self.nodes;
+      baseAttrs = {
+        children = _self: id: lib.filterAttrs (_: n: n.parent == id) rootNodes;
+        imports = _self: _id: [ ];
+      };
+      # Derived children: rollout tracking for beta-enabled orgs
+      derivedAttrs = {
+        derived-children =
+          self: id:
+          let
+            node = self.node id;
+          in
+          if node.type == "org" && (node.decls.beta-features or false) then
+            {
+              "rollout:${id}" = {
+                id = "rollout:${id}";
+                parent = id;
+                decls = {
+                  stage = "canary";
+                  targetPct = 100;
+                };
+                type = "rollout";
+              };
+            }
+          else
+            { };
+      };
     in
-    lib.concatMapAttrs (
-      id: node:
-      if (node.decls.beta-features or false) then
-        {
-          "rollout:${id}" = {
-            inherit id;
-            parent = id;
-            decls = {
-              stage = "canary";
-              targetPct = 100;
-            };
-            imports = [ ];
-            childrenIds = [ ];
-            type = "rollout";
-            edgesByLabel = { };
-            rels = { };
-          };
-        }
-      else
-        { }
-    ) orgs;
+    baseAttrs // derivedAttrs // userAttrs;
 in
 {
-  inherit baseNodes synthesize;
+  inherit roots mkAttributes;
 }

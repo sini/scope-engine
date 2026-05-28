@@ -1,14 +1,14 @@
 # ACL scope graph construction.
 #
 # Three-level resolution (from docs/ACL.md):
-#   groups                              ← shared definitions (kanidm, unix, system scopes)
+#   groups                              <- shared definitions (kanidm, unix, system scopes)
 #     |
-#   environments.<env>.access           ← user → [group] bindings per environment
+#   environments.<env>.access           <- user -> [group] bindings per environment
 #     |
-#   env.system-access-groups            ← env-wide baseline login gates
-#     + host.system-access-groups       ← host-specific login gates (merged with env)
+#   env.system-access-groups            <- env-wide baseline login gates
+#     + host.system-access-groups       <- host-specific login gates (merged with env)
 #     |
-#   resolved user                       ← enable + systemGroups derived from above
+#   resolved user                       <- enable + systemGroups derived from above
 {
   engine,
   lib,
@@ -21,8 +21,8 @@ let
   hostNames = builtins.attrNames hosts;
   envNames = builtins.attrNames environments;
 
-  baseNodes = engine.buildNodes {
-    # Parent edges: hosts → environments → root
+  roots = engine.buildNodes {
+    # Parent edges: hosts -> environments -> root
     parentGraph = engine.overlays (
       [ (engine.star "root" (map (e: "env:${e}") envNames)) ]
       ++ map (host: engine.edge "host:${host}" "env:${hosts.${host}.environment}") hostNames
@@ -100,5 +100,5 @@ let
   };
 in
 {
-  inherit baseNodes;
+  inherit roots;
 }

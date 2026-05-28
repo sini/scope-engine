@@ -1,4 +1,4 @@
-# ACL tests — validates resolution examples from docs/ACL.md.
+# ACL tests -- validates resolution examples from docs/ACL.md.
 {
   engine,
   lib,
@@ -46,9 +46,9 @@
       has-grafana = builtins.elem "grafana.access" r.allGroups;
     };
 
-  cortex-gates = result.evaluated."host:cortex".get "effectiveGates";
-  axon-gates = result.evaluated."host:axon-01".get "effectiveGates";
-  patch-gates = result.evaluated."host:patch".get "effectiveGates";
+  cortex-gates = result.get "host:cortex" "effectiveGates";
+  axon-gates = result.get "host:axon-01" "effectiveGates";
+  patch-gates = result.get "host:patch" "effectiveGates";
 
   shuo-on-cortex =
     let
@@ -116,17 +116,17 @@
 
   kanidm-groups = builtins.sort builtins.lessThan (
     engine.collect { filter = n: n.type == "group" && (n.decls.scope or "") == "kanidm"; } (self: id: [
-      self.nodes.${id}.decls.name
+      (self.node id).decls.name
     ]) result
   );
   unix-groups = builtins.sort builtins.lessThan (
     engine.collect { filter = n: n.type == "group" && (n.decls.scope or "") == "unix"; } (self: id: [
-      self.nodes.${id}.decls.name
+      (self.node id).decls.name
     ]) result
   );
   system-groups = builtins.sort builtins.lessThan (
     engine.collect { filter = n: n.type == "group" && (n.decls.scope or "") == "system"; } (self: id: [
-      self.nodes.${id}.decls.name
+      (self.node id).decls.name
     ]) result
   );
 }

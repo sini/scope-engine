@@ -3,38 +3,32 @@
   engine,
   lib,
   result,
-  baseNodes,
+  roots,
   attributes,
 }:
 {
-  app-direct-deps = result.nodes."app@1.0".imports;
-  app-all-deps = builtins.sort builtins.lessThan (result.evaluated."app@1.0".get "allDeps");
-  app-dep-count = result.evaluated."app@1.0".get "depCount";
-  app-dep-depth = result.evaluated."app@1.0".get "depDepth";
-  json-dep-depth = result.evaluated."lib-json@1.5".get "depDepth";
+  app-direct-deps = result.get "app@1.0" "imports";
+  app-all-deps = builtins.sort builtins.lessThan (result.get "app@1.0" "allDeps");
+  app-dep-count = result.get "app@1.0" "depCount";
+  app-dep-depth = result.get "app@1.0" "depDepth";
+  json-dep-depth = result.get "lib-json@1.5" "depDepth";
 
-  app-available-apis = builtins.sort builtins.lessThan (
-    result.evaluated."app@1.0".get "availableAPIs"
-  );
-  http-available-apis = builtins.sort builtins.lessThan (
-    result.evaluated."lib-http@2.3".get "availableAPIs"
-  );
-  tls-available-apis = result.evaluated."lib-tls@1.2".get "availableAPIs";
+  app-available-apis = builtins.sort builtins.lessThan (result.get "app@1.0" "availableAPIs");
+  http-available-apis = builtins.sort builtins.lessThan (result.get "lib-http@2.3" "availableAPIs");
+  tls-available-apis = result.get "lib-tls@1.2" "availableAPIs";
 
   app-dev-deps = engine.followEdge "D" result "app@1.0";
-  logging-not-in-runtime-deps =
-    !(builtins.elem "lib-logging@3.1" (result.evaluated."app@1.0".get "allDeps"));
+  logging-not-in-runtime-deps = !(builtins.elem "lib-logging@3.1" (result.get "app@1.0" "allDeps"));
 
-  manifest-exists = result.nodes ? "resolved:app@1.0";
-  manifest-resolved-deps =
-    builtins.sort builtins.lessThan
-      result.nodes."resolved:app@1.0".decls.resolvedDeps;
-  manifest-type = result.nodes."resolved:app@1.0".type;
+  manifest-exists = result.allNodes ? "resolved:app@1.0";
+  manifest-resolved-deps = builtins.sort builtins.lessThan (result.node "resolved:app@1.0")
+  .decls.resolvedDeps;
+  manifest-type = (result.node "resolved:app@1.0").type;
 
   json-version-conflict =
     let
       jsonVersions = engine.collect { filter = n: (n.decls.name or "") == "lib-json"; } (self: id: [
-        self.nodes.${id}.decls.version
+        (self.node id).decls.version
       ]) result;
     in
     builtins.sort builtins.lessThan jsonVersions;
@@ -58,7 +52,9 @@
 
   debug-works =
     let
-      debugResult = engine.evalDebug { inherit baseNodes attributes; };
+      debugResult = engine.evalDebug {
+        inherit roots attributes;
+      };
     in
-    debugResult.evaluated."app@1.0".get "depDepth";
+    debugResult.get "app@1.0" "depDepth";
 }

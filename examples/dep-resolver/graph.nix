@@ -12,9 +12,9 @@
 #   ├── lib-json@2.0    ← conflict: app wants 1.x, but exists
 #   ├── lib-tls@1.2
 #   └── lib-logging@3.1 → depends on: lib-json@1.x
-{ engine }:
+{ engine, lib }:
 let
-  baseNodes = engine.buildNodes {
+  roots = engine.buildNodes {
     parentGraph = engine.star "workspace" [
       "app@1.0"
       "lib-http@2.3"
@@ -101,24 +101,43 @@ let
     };
   };
 
-  # HOAG synthesis: compute a "resolved" manifest node for app (Vogt 1989).
-  synthesize = self: {
-    "resolved:app@1.0" = {
-      id = "resolved:app@1.0";
-      parent = "workspace";
-      decls = {
-        package = "app@1.0";
-        resolvedDeps = self.evaluated."app@1.0".get "allDeps";
-        totalAPIs = self.evaluated."app@1.0".get "availableAPIs";
+  # Build attributes with children that include synthesized manifest nodes
+  mkAttributes =
+    rootNodes: userAttrs:
+    let
+      baseAttrs = {
+        children =
+          self: id:
+          let
+            staticChildren = lib.filterAttrs (_: n: n.parent == id) rootNodes;
+          in
+          staticChildren;
+        imports = _self: id: (_self.node id).decls.__edges.I or [ ];
+        "edges-D" = _self: id: (_self.node id).decls.__edges.D or [ ];
       };
-      imports = [ ];
-      childrenIds = [ ];
-      type = "manifest";
-      edgesByLabel = { };
-      rels = { };
-    };
-  };
+      # Derived children: synthesize manifest node for app
+      derivedAttrs = {
+        derived-children =
+          self: id:
+          if id == "workspace" then
+            {
+              "resolved:app@1.0" = {
+                id = "resolved:app@1.0";
+                parent = "workspace";
+                decls = {
+                  package = "app@1.0";
+                  resolvedDeps = self.get "app@1.0" "allDeps";
+                  totalAPIs = self.get "app@1.0" "availableAPIs";
+                };
+                type = "manifest";
+              };
+            }
+          else
+            { };
+      };
+    in
+    baseAttrs // derivedAttrs // userAttrs;
 in
 {
-  inherit baseNodes synthesize;
+  inherit roots mkAttributes;
 }

@@ -2,14 +2,18 @@
 #
 # rolePermissions is exported alongside attributes because tests need
 # it directly for verifying the role hierarchy resolution.
-{ engine, lib }:
+{
+  engine,
+  lib,
+  roots,
+}:
 let
   # Collect all permissions for a role, including inherited via R edges.
   rolePermissions =
     self: roleId:
     let
-      node = self.nodes.${roleId};
-      local = lib.filterAttrs (_: v: v == true) node.decls;
+      node = self.node roleId;
+      local = lib.filterAttrs (k: v: k != "__edges" && v == true) node.decls;
       inherited = lib.foldl' (acc: rid: acc // (rolePermissions self rid)) { } (
         engine.followEdge "R" self roleId
       );
@@ -20,25 +24,31 @@ in
   inherit rolePermissions;
 
   attributes = {
+    children = _self: id: lib.filterAttrs (_: n: n.parent == id) roots;
+    imports = _self: _id: [ ];
+    "edges-R" = _self: id: (_self.node id).decls.__edges.R or [ ];
+    "edges-A" = _self: id: (_self.node id).decls.__edges.A or [ ];
+    "edges-D" = _self: id: (_self.node id).decls.__edges.D or [ ];
+
     permissions =
       self: id:
       lib.foldl' (acc: rid: acc // (rolePermissions self rid)) { } (engine.followEdge "A" self id);
 
     hasPermission = engine.paramAttr (
       self: id: perm:
-      (self.evaluated.${id}.get "permissions").${perm} or false
+      (self.get id "permissions").${perm} or false
     );
 
     isDenied = engine.paramAttr (
       self: id: args:
-      builtins.elem args.action ((self.nodes.${id}.rels.deny or { }).${args.resource} or [ ])
+      builtins.elem args.action (((self.node id).decls.__deny or { }).${args.resource} or [ ])
     );
 
     canAccess = engine.paramAttr (
       self: id: args:
       let
-        hasPerm = self.evaluated.${id}.get "hasPermission" args.action;
-        denied = self.evaluated.${id}.get "isDenied" args;
+        hasPerm = self.get id "hasPermission" args.action;
+        denied = self.get id "isDenied" args;
       in
       hasPerm && !denied
     );

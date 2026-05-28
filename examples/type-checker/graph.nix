@@ -5,10 +5,10 @@
 # Structural subtyping: A <: B iff every field in B exists in A.
 #
 # Type language:
-#   Num, Bool, String                     — primitives
-#   { x: Num, y: Num }                    — record type (scope)
-#   { z: Num } extends { x: Num, y: Num } — record extension (R edge)
-#   (Num, Num) -> Bool                    — function type
+#   Num, Bool, String                     -- primitives
+#   { x: Num, y: Num }                    -- record type (scope)
+#   { z: Num } extends { x: Num, y: Num } -- record extension (R edge)
+#   (Num, Num) -> Bool                    -- function type
 #
 # Program:
 #   type Point2D = { x: Num, y: Num }
@@ -21,9 +21,9 @@
 #   class Shape  { area: () -> Num }
 #   class Circle extends Shape { radius: Num }
 #   class Rect   extends Shape { width: Num, height: Num }
-{ engine }:
+{ engine, lib }:
 let
-  baseNodes = engine.buildNodes {
+  roots = engine.buildNodes {
     parentGraph = engine.star "root" [
       "Point2D"
       "Point3D"
@@ -45,7 +45,21 @@ let
       ];
     };
     decls = {
-      root = { };
+      root = {
+        __typeDecl = {
+          "Point2D" = "record";
+          "Point3D" = "record";
+          Color = "record";
+          Named = "record";
+          NamedPoint = "record";
+          Shape = "class";
+          Circle = "class";
+          Rect = "class";
+          Num = "primitive";
+          Bool = "primitive";
+          String = "primitive";
+        };
+      };
       "Point2D" = {
         x = "Num";
         y = "Num";
@@ -76,7 +90,13 @@ let
         width = "Num";
         height = "Num";
       };
-      env = { };
+      env = {
+        __bindings = {
+          origin = "Point2D";
+          p3 = "Point3D";
+          distance = "(Point2D, Point2D) -> Num";
+        };
+      };
     };
     types = {
       root = "root";
@@ -90,49 +110,39 @@ let
       Rect = "class";
       env = "env";
     };
-    relations = {
-      root = {
-        typeDecl = {
-          "Point2D" = "record";
-          "Point3D" = "record";
-          Color = "record";
-          Named = "record";
-          NamedPoint = "record";
-          Shape = "class";
-          Circle = "class";
-          Rect = "class";
-          Num = "primitive";
-          Bool = "primitive";
-          String = "primitive";
-        };
-      };
-      env = {
-        bindings = {
-          origin = "Point2D";
-          p3 = "Point3D";
-          distance = "(Point2D, Point2D) -> Num";
-        };
-      };
-    };
   };
 
-  # HOAG synthesis: instantiate Pair<A,B> for Pair<Num, String> (Vogt 1989).
-  synthesize = _self: {
-    "Pair<Num,String>" = {
-      id = "Pair<Num,String>";
-      parent = "root";
-      decls = {
-        fst = "Num";
-        snd = "String";
+  # Build attributes with children that include synthesized Pair node
+  mkAttributes =
+    rootNodes: userAttrs:
+    let
+      baseAttrs = {
+        children = _self: id: lib.filterAttrs (_: n: n.parent == id) rootNodes;
+        imports = _self: _id: [ ];
+        "edges-R" = _self: id: (_self.node id).decls.__edges.R or [ ];
+        "edges-E" = _self: id: (_self.node id).decls.__edges.E or [ ];
       };
-      imports = [ ];
-      childrenIds = [ ];
-      type = "record";
-      edgesByLabel = { };
-      rels = { };
-    };
-  };
+      derivedAttrs = {
+        derived-children =
+          _self: id:
+          if id == "root" then
+            {
+              "Pair<Num,String>" = {
+                id = "Pair<Num,String>";
+                parent = "root";
+                decls = {
+                  fst = "Num";
+                  snd = "String";
+                };
+                type = "record";
+              };
+            }
+          else
+            { };
+      };
+    in
+    baseAttrs // derivedAttrs // userAttrs;
 in
 {
-  inherit baseNodes synthesize;
+  inherit roots mkAttributes;
 }
