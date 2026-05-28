@@ -1,96 +1,103 @@
-# Rule-based NixOS configuration engine.
-# Rules match servers via SQL WHERE clauses and deliver NixOS module fragments.
-# Parallels nest-traits' CSS selector → config delivery:
-#   nest:  { is = traits.host; nixos = { ... }; }
-#   sql:   { where = "tags IN ('web')"; nixos = { ... }; }
+# Rule-based NixOS configuration engine — gen-derive edition.
+# Replaces the hand-rolled rule dispatch with gen-derive's stratified dispatch
+# and fixpoint convergence. Rules use gen-select selectors as conditions.
 #
-# The engine evaluates each rule's WHERE against each server, collects matching
-# modules, and deep-merges them into per-server NixOS configurations.
-{ lib, queryFn }:
-# queryFn: fleet → sqlString → results (the query function from engine.nix)
+# Two phases:
+#   structural — enrich actions feed back into context (fixpoint converges)
+#   config     — nixos actions collect NixOS module fragments
+{
+  lib,
+  deriveLib,
+  selectLib,
+  queryFn,
+}:
 let
-  inherit (builtins)
-    any
-    filter
-    isFunction
-    length
+  inherit (deriveLib)
+    mkRule
+    fixpoint
+    entryAnywhere
+    entryAfter
+    mkActions
     ;
-  inherit (lib) concatMap foldl' mapAttrs;
+  match = deriveLib.adapters.select.mkMatch selectLib;
 
-  # Match a rule against a specific server.
-  # Three matching modes:
-  #   1. No `where` or `match` → matches all servers
-  #   2. `where` (string) → SQL WHERE clause evaluated against the servers table
-  #   3. `match` (function) → Nix predicate: { fleet, serverName, server } → bool
-  ruleMatchesServer =
-    fleet: rule: serverName:
-    let
-      whereClause = rule.where or null;
-      matchFn = rule.match or null;
-    in
-    if matchFn != null then
-      matchFn {
-        inherit fleet serverName;
-        server = fleet.server.${serverName};
-      }
-    else if whereClause == null then
-      true # no WHERE = matches all servers
-    else
-      let
-        # Support both WHERE fragments and full SELECT queries.
-        # If the clause starts with SELECT, run it as-is; otherwise wrap it.
-        trimmed = lib.trimWith {
-          start = true;
-          end = true;
-        } whereClause;
-        isFullQuery = lib.hasPrefix "SELECT" (lib.toUpper (lib.substring 0 6 trimmed));
-        sqlQuery = if isFullQuery then trimmed else "SELECT name FROM servers WHERE ${whereClause}";
-        results = queryFn fleet sqlQuery;
-      in
-      any (r: (r.name or r) == serverName) results;
+  # Action vocabulary: two phases
+  fx = mkActions {
+    structural = [ "enrich" ];
+    config = [ "nixos" ];
+  };
 
-  # Collect all rule modules that match a server
-  matchingModules =
+  # Phase DAG: structural fires first, config fires after
+  phases = {
+    structural = entryAnywhere { };
+    config = entryAfter [ "structural" ] { };
+  };
+
+  # Bridge server data to gen-select's five-field accessor context
+  mkServerContext = serverData: {
+    data = _id: serverData;
+    parent = _: null;
+    children = _: [ ];
+    ancestors = _: [ ];
+    siblings = _: [ ];
+  };
+
+  # Extract enrich actions as context feedback for fixpoint
+  extract =
+    actions:
+    lib.foldl' (acc: a: if a.__action == "enrich" then acc // { ${a.key} = a.value; } else acc) { } (
+      actions.structural or [ ]
+    );
+
+  # Dispatch rules for a server via gen-derive fixpoint, return merged NixOS config
+  buildHostConfig =
     fleet: rules: serverName:
     let
-      matches = filter (r: ruleMatchesServer fleet r serverName) rules;
+      server = fleet.server.${serverName};
+      serverData = server // {
+        tags = server.tags or [ ];
+        environment =
+          if builtins.isAttrs (server.environment or null) then
+            server.environment.tier or "unknown"
+          else
+            server.environment or "unknown";
+      };
+      result = fixpoint {
+        inherit
+          rules
+          phases
+          match
+          extract
+          ;
+        id = serverName;
+        context = mkServerContext serverData;
+        classify = fx.classify;
+        combine = ctx: ext: {
+          data = _id: (ctx.data _id) // ext;
+          inherit (ctx)
+            parent
+            children
+            ancestors
+            siblings
+            ;
+        };
+        eq = a: b: (a.data "x") == (b.data "x");
+      };
+      nixosActions = result.actions.config or [ ];
     in
-    concatMap (
-      r:
-      let
-        nixosCfg = r.nixos or { };
-      in
-      if isFunction nixosCfg then
-        [
-          (nixosCfg {
-            inherit fleet serverName;
-            server = fleet.server.${serverName};
-          })
-        ]
-      else
-        [ nixosCfg ]
-    ) matches;
-
-  # Build a complete NixOS config for a server from matching rules.
-  # Deep-merges the base module (from nixos.nix buildServerModule) with all
-  # matching rule modules, in rule declaration order.
-  buildHostConfig =
-    fleet: rules: baseModuleFn: serverName:
-    let
-      base = baseModuleFn fleet serverName;
-      ruleModules = matchingModules fleet rules serverName;
-    in
-    foldl' lib.recursiveUpdate base ruleModules;
+    lib.foldl' lib.recursiveUpdate { } (map (a: builtins.removeAttrs a [ "__action" ]) nixosActions);
 
   # Build all host configs: { serverName = mergedConfig; }
   buildAllHostConfigs =
-    fleet: rules: baseModuleFn:
-    mapAttrs (name: _: buildHostConfig fleet rules baseModuleFn name) (fleet.server or { });
+    fleet: rules: lib.mapAttrs (name: _: buildHostConfig fleet rules name) (fleet.server or { });
 in
 {
   inherit
-    ruleMatchesServer
-    matchingModules
+    fx
+    phases
+    match
+    mkServerContext
+    extract
     buildHostConfig
     buildAllHostConfigs
     ;

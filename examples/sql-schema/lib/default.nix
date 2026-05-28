@@ -5,6 +5,7 @@
   graphLib,
   genLib,
   selectLib,
+  deriveLib,
 }:
 let
   rawFleet = import ./fleet.nix;
@@ -98,76 +99,109 @@ let
     queryFn = sqlEngine.query;
   };
 
-  # Rule-based host configuration
+  # Rule-based host configuration (gen-derive stratified dispatch)
   rulesLib = import ./rules.nix {
-    inherit lib;
+    inherit lib deriveLib selectLib;
     queryFn = sqlEngine.query;
   };
 
-  # Host configs: base modules + rule-matched modules
-  hostConfigs = rulesLib.buildAllHostConfigs rawFleet demoRules nixosLib.buildServerModule;
+  sel = selectLib;
+
+  # Default demo rules — gen-derive mkRule with gen-select selectors
+  demoRules = [
+    # All servers get SSH (unconditional)
+    (deriveLib.mkRule {
+      condition = sel.star;
+      produce = _id: _ctx: [ (rulesLib.fx.nixos { services.openssh.enable = true; }) ];
+      identity = "ssh-everywhere";
+    })
+
+    # Web-tagged servers get nginx
+    (deriveLib.mkRule {
+      condition = sel.when (_id: ctx: builtins.elem "web" ((ctx.data _id).tags or [ ]));
+      produce = _id: _ctx: [ (rulesLib.fx.nixos { services.nginx.enable = true; }) ];
+      identity = "web-nginx";
+    })
+
+    # Database-tagged servers get postgresql
+    (deriveLib.mkRule {
+      condition = sel.when (_id: ctx: builtins.elem "database" ((ctx.data _id).tags or [ ]));
+      produce = _id: _ctx: [ (rulesLib.fx.nixos { services.postgresql.enable = true; }) ];
+      identity = "db-postgresql";
+    })
+
+    # ACME certs: servers with exposed port 443
+    (deriveLib.mkRule {
+      condition = sel.when (
+        id: _ctx:
+        let
+          rows = sqlEngine.query rawFleet "SELECT s.name FROM servers s JOIN services svc ON svc.server = s.name JOIN ports p ON p.service = svc.name WHERE p.expose = true AND p.number = 443";
+        in
+        builtins.any (r: (r.name or r) == id) rows
+      );
+      produce = _id: _ctx: [ (rulesLib.fx.nixos { security.acme.acceptTerms = true; }) ];
+      identity = "acme-certs";
+    })
+
+    # Admin-role users on server get sudo
+    (deriveLib.mkRule {
+      condition = sel.when (
+        id: _ctx:
+        let
+          adminUsers = lib.filterAttrs (
+            _: u: (u.ldap-role or "") == "admin" && builtins.elem id (u.servers or [ ])
+          ) (rawFleet.user or { });
+        in
+        adminUsers != { }
+      );
+      produce = _id: _ctx: [ (rulesLib.fx.nixos { security.sudo.enable = true; }) ];
+      identity = "admin-sudo";
+    })
+
+    # Prod servers get monitoring
+    (deriveLib.mkRule {
+      condition = sel.when (_id: ctx: (ctx.data _id).environment == "prod");
+      produce = _id: _ctx: [
+        (rulesLib.fx.nixos { services.prometheus.exporters.node.enable = true; })
+      ];
+      identity = "prod-monitoring";
+    })
+
+    # --- Fixpoint convergence demo ---
+    # Pass 1: web servers get enrichment flag
+    (deriveLib.mkRule {
+      condition = sel.when (_id: ctx: builtins.elem "web" ((ctx.data _id).tags or [ ]));
+      produce = _id: _ctx: [
+        (rulesLib.fx.enrich {
+          key = "has-nginx";
+          value = true;
+        })
+      ];
+      identity = "nginx-enrichment";
+    })
+
+    # Pass 2: fires only after enrichment adds has-nginx to context
+    (deriveLib.mkRule {
+      condition = sel.when (_id: ctx: (ctx.data _id).has-nginx or false);
+      produce = _id: _ctx: [
+        (rulesLib.fx.nixos { services.prometheus.exporters.nginx.enable = true; })
+      ];
+      identity = "nginx-monitoring";
+    })
+  ];
+
+  # Host configs: base modules (from nixos.nix) + gen-derive rule output
+  hostConfigs = lib.mapAttrs (
+    name: _:
+    let
+      base = nixosLib.buildServerModule rawFleet name;
+      ruleConfig = rulesLib.buildHostConfig evaluated.fleet demoRules name;
+    in
+    lib.recursiveUpdate base ruleConfig
+  ) (rawFleet.server or { });
 
   # SQL queries against the rendered NixOS configs
   queryHostConfigs = nixosLib.queries.queryConfigs sqlEngine.query hostConfigs;
-
-  # Default demo rules — SQL WHERE → NixOS modules
-  demoRules = [
-    # All servers get SSH (no WHERE = matches all)
-    {
-      nixos = {
-        services.openssh.enable = true;
-      };
-    }
-
-    # Web-tagged servers get nginx
-    {
-      where = "tags IN ('web')";
-      nixos = {
-        services.nginx.enable = true;
-      };
-    }
-
-    # Database-tagged servers get postgresql
-    {
-      where = "tags IN ('database')";
-      nixos = {
-        services.postgresql.enable = true;
-      };
-    }
-
-    # Servers with exposed port 443 get ACME certs
-    {
-      where = "SELECT s.name FROM servers s JOIN services svc ON svc.server = s.name JOIN ports p ON p.service = svc.name WHERE p.expose = true AND p.number = 443";
-      nixos = {
-        security.acme.acceptTerms = true;
-      };
-    }
-
-    # Servers with admin-role users get sudo enabled
-    # Uses match function: the "servers" field on users is setOf (list),
-    # which the SQL JOIN engine can't traverse — so use Nix predicate.
-    {
-      match =
-        { fleet, serverName, ... }:
-        let
-          adminUsers = lib.filterAttrs (
-            _: u: (u.ldap-role or "") == "admin" && builtins.elem serverName (u.servers or [ ])
-          ) (fleet.user or { });
-        in
-        adminUsers != { };
-      nixos = {
-        security.sudo.enable = true;
-      };
-    }
-
-    # Prod servers get monitoring
-    {
-      where = "environment = 'prod'";
-      nixos = {
-        services.prometheus.exporters.node.enable = true;
-      };
-    }
-  ];
 in
 {
   inherit (schemaModule) refinements validators;
@@ -216,13 +250,16 @@ in
   nixosConfigs = nixosLib.evalAllConfigs rawFleet;
   nixosQueries = nixosLib.queries;
 
-  # Rule-based host configuration
+  # Rule-based host configuration (gen-derive)
   inherit (rulesLib)
-    ruleMatchesServer
-    matchingModules
+    fx
+    phases
+    match
+    mkServerContext
+    extract
     buildHostConfig
     buildAllHostConfigs
     ;
-  inherit demoRules;
+  inherit deriveLib selectLib demoRules;
   inherit hostConfigs queryHostConfigs;
 }

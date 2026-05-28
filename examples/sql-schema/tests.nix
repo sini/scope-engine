@@ -1449,6 +1449,35 @@ in
       };
     };
 
+  fixpoint =
+    let
+      configs = sql.hostConfigs;
+    in
+    {
+      # Fixpoint convergence: web servers get enriched with has-nginx,
+      # then nginx-monitoring rule fires on the enriched context
+      test-web-has-nginx-monitoring = {
+        expr = configs.web-1.services.prometheus.exporters.nginx.enable or false;
+        expected = true;
+      };
+
+      test-db-no-nginx-monitoring = {
+        expr = configs.db-1.services.prometheus.exporters.nginx.enable or false;
+        expected = false;
+      };
+
+      test-api-no-nginx-monitoring = {
+        expr = configs.api-1.services.prometheus.exporters.nginx.enable or false;
+        expected = false;
+      };
+
+      # web-2 also tagged "web" so should also get nginx monitoring
+      test-web2-has-nginx-monitoring = {
+        expr = configs.web-2.services.prometheus.exporters.nginx.enable or false;
+        expected = true;
+      };
+    };
+
   integration = {
     test-full-pipeline = {
       # Schema → Fleet → Graph → DDL → ACL → Reachability all evaluate
