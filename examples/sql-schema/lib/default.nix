@@ -11,11 +11,71 @@ let
   evaluated = schemaModule.evalSchema rawFleet;
 
   # Graph construction: kind-level and instance-level
-  kindGraphInputs = schemaLib.buildKindGraph evaluated.schema;
-  kindNodes = engine.buildNodes kindGraphInputs;
+  # Bridge from gen-schema introspection to gen-scope/gen-graph (consumer-side)
+  kindNodes = graphLib.mock.mkGraph {
+    edges = map (e: {
+      from = e.from;
+      to = e.to;
+    }) evaluated.schema._edges;
+    nodeData = lib.genAttrs evaluated.schema._kindNames (k: {
+      type = "kind";
+      kind = k;
+    });
+  };
 
-  instanceGraphInputs = schemaLib.buildInstanceGraph evaluated.schema evaluated.fleet;
-  instanceNodes = engine.buildNodes instanceGraphInputs;
+  instanceNodes =
+    let
+      # Collect all instances with namespaced IDs
+      allInstances = lib.concatMapAttrs (
+        kindName: instances:
+        lib.mapAttrs' (name: inst: {
+          name = "${kindName}:${name}";
+          value = {
+            type = kindName;
+            inherit name;
+            data = inst;
+          };
+        }) instances
+      ) evaluated.fleet;
+
+      # Build edges from ref fields
+      instanceEdges = lib.concatLists (
+        lib.mapAttrsToList (
+          kindName: instances:
+          let
+            refs = (evaluated.schema._kindMeta kindName).refs;
+          in
+          lib.concatLists (
+            lib.mapAttrsToList (
+              instName: inst:
+              lib.concatLists (
+                lib.mapAttrsToList (
+                  refField: targetKind:
+                  let
+                    val = inst.${refField} or null;
+                    targetName =
+                      if val == null then
+                        null
+                      else if builtins.isString val then
+                        val
+                      else
+                        val.name or null;
+                  in
+                  lib.optional (targetName != null) {
+                    from = "${kindName}:${instName}";
+                    to = "${targetKind}:${targetName}";
+                  }
+                ) refs
+              )
+            ) instances
+          )
+        ) evaluated.fleet
+      );
+    in
+    graphLib.mock.mkGraph {
+      edges = instanceEdges;
+      nodeData = allInstances;
+    };
 
   # SQL parser + engine
   sqlParser = import ./sql.nix { inherit lib; };
@@ -116,7 +176,6 @@ in
 
   # Graph API
   inherit kindNodes instanceNodes;
-  inherit kindGraphInputs instanceGraphInputs;
 
   # gen-graph queries on kind-level graph
   kindRoots = graphLib.roots kindNodes;

@@ -8,7 +8,6 @@
 }:
 let
   inherit (sql) schema fleet;
-  meta = schema._meta;
 in
 {
   smoke = {
@@ -30,12 +29,12 @@ in
   schema = {
     test-kind-count = {
       # 21 schema kinds (effective-access and network-reachability are synthesized, not schema kinds)
-      expr = builtins.length meta.kindNames;
+      expr = builtins.length schema._kindNames;
       expected = 21;
     };
 
     test-kind-names = {
-      expr = meta.kindNames;
+      expr = schema._kindNames;
       expected = [
         "access-policy"
         "backend"
@@ -62,43 +61,43 @@ in
     };
 
     test-network-parent-is-datacenter = {
-      expr = meta.topology.network.parent;
+      expr = schema._topology.network.parent;
       expected = "datacenter";
     };
 
     test-subnet-parent-is-network = {
-      expr = meta.topology.subnet.parent;
+      expr = schema._topology.subnet.parent;
       expected = "network";
     };
 
     test-vlan-parent-is-subnet = {
-      expr = meta.topology.vlan.parent;
+      expr = schema._topology.vlan.parent;
       expected = "subnet";
     };
 
     test-interface-parent-is-server = {
-      expr = meta.topology.interface.parent;
+      expr = schema._topology.interface.parent;
       expected = "server";
     };
 
     test-port-parent-is-service = {
-      expr = meta.topology.port.parent;
+      expr = schema._topology.port.parent;
       expected = "service";
     };
 
     test-backend-parent-is-loadbalancer = {
-      expr = meta.topology.backend.parent;
+      expr = schema._topology.backend.parent;
       expected = "loadbalancer";
     };
 
     test-dns-record-parent-is-domain = {
-      expr = meta.topology.dns-record.parent;
+      expr = schema._topology.dns-record.parent;
       expected = "domain";
     };
 
     test-roots = {
       # Roots = kinds with no parent in topology (may still have ref edges)
-      expr = meta.roots;
+      expr = schema._roots;
       expected = [
         "access-policy"
         "certificate"
@@ -118,7 +117,7 @@ in
     };
 
     test-server-ref-fields = {
-      expr = builtins.sort builtins.lessThan (builtins.attrNames (meta.kindMeta "server").refs);
+      expr = builtins.sort builtins.lessThan (builtins.attrNames (schema._kindMeta "server").refs);
       expected = [
         "datacenter"
         "environment"
@@ -128,7 +127,7 @@ in
     };
 
     test-user-ref-fields = {
-      expr = builtins.sort builtins.lessThan (builtins.attrNames (meta.kindMeta "user").refs);
+      expr = builtins.sort builtins.lessThan (builtins.attrNames (schema._kindMeta "user").refs);
       expected = [
         "ldap-role"
         "manager"
@@ -151,11 +150,6 @@ in
     test-server-has-name = {
       expr = fleet.server.web-1.name;
       expected = "web-1";
-    };
-
-    test-server-has-nodeid = {
-      expr = fleet.server.web-1.nodeId;
-      expected = "server:web-1";
     };
 
     test-server-datacenter-ref-resolves = {
@@ -324,7 +318,7 @@ in
 
   graph = {
     test-kind-node-count = {
-      expr = graphLib.sizeNodes sql.kindNodes;
+      expr = builtins.length sql.kindNodes.nodes;
       expected = 21;
     };
 
@@ -347,7 +341,7 @@ in
 
     test-instance-node-count = {
       # Total instances across all kinds
-      expr = graphLib.sizeNodes sql.instanceNodes;
+      expr = builtins.length sql.instanceNodes.nodes;
       expected =
         let
           counts = lib.mapAttrsToList (_: instances: builtins.length (builtins.attrNames instances)) fleet;
@@ -383,11 +377,7 @@ in
     };
 
     test-select-servers = {
-      expr =
-        let
-          serverNodes = graphLib.select sql.instanceNodes (n: n.type == "server");
-        in
-        builtins.sort builtins.lessThan (builtins.attrNames serverNodes);
+      expr = builtins.sort builtins.lessThan (graphLib.select sql.instanceNodes (n: n.type == "server"));
       expected = [
         "server:api-1"
         "server:db-1"

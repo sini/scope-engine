@@ -107,8 +107,7 @@ let
   generateTable =
     schema: kindName:
     let
-      meta = schema._meta;
-      kindMeta = meta.kindMeta kindName;
+      kindMeta = schema._kindMeta kindName;
       refs = kindMeta.refs;
       tableName = escapeIdent kindName;
 
@@ -199,8 +198,7 @@ let
   generateIndexes =
     schema: kindName:
     let
-      meta = schema._meta;
-      kindMeta = meta.kindMeta kindName;
+      kindMeta = schema._kindMeta kindName;
       refs = kindMeta.refs;
       tableName = escapeIdent kindName;
     in
@@ -231,15 +229,14 @@ let
   migrationOrder =
     schema:
     let
-      meta = schema._meta;
-      kindNames = meta.kindNames;
+      kindNames = schema._kindNames;
 
       # Build dependency map: kind → [kinds it depends on via refs and parent]
       deps = lib.genAttrs kindNames (
         k:
         let
-          refTargets = builtins.attrValues (meta.kindMeta k).refs;
-          parentDep = meta.topology.${k}.parent;
+          refTargets = builtins.attrValues (schema._kindMeta k).refs;
+          parentDep = schema._topology.${k}.parent;
         in
         # Filter out self-refs (they don't create ordering constraints)
         builtins.filter (dep: dep != k) (
