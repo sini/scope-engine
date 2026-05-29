@@ -63,10 +63,14 @@ let
         in
         if strict then builtins.deepSeq validated validated else validated;
 
-      # Pre-index all non-P edges by source, grouped by label
+      # Pre-index all non-P edges by source, grouped by label.
+      # Uses groupBy (O(E)) instead of foldl'+// (O(E²)).
       edgeIndex = lib.mapAttrs (
         _label: g:
-        builtins.foldl' (acc: e: acc // { ${e.from} = (acc.${e.from} or [ ]) ++ [ e.to ]; }) { } g.edges
+        let
+          grouped = builtins.groupBy (e: e.from) g.edges;
+        in
+        builtins.mapAttrs (_: es: map (e: e.to) es) grouped
       ) (builtins.removeAttrs allEdgeGraphs [ "P" ]);
     in
     builtins.seq parentIndex (

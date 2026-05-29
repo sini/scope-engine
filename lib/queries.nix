@@ -51,15 +51,49 @@ let
     in
     go { ${id} = true; } id;
 
+  # Early-return walk: O(depth) best case instead of always building full list.
   isAncestor =
     self: ancestorId: id:
-    builtins.elem ancestorId (ancestors self id);
+    let
+      go =
+        visited: nid:
+        let
+          p = (self.node nid).parent;
+        in
+        if p == null then
+          false
+        else if p == ancestorId then
+          true
+        else if visited ? ${p} then
+          false
+        else
+          go (visited // { ${p} = true; }) p;
+    in
+    go { ${id} = true; } id;
 
+  # DFS with early termination: avoids building full descendant list.
   isDescendant =
     self: descendantId: id:
-    builtins.elem descendantId (descendants self id);
+    let
+      go =
+        visited: nid:
+        let
+          cids = builtins.attrNames (self.get nid "children");
+        in
+        builtins.any (
+          cid:
+          if visited ? ${cid} then
+            false
+          else if cid == descendantId then
+            true
+          else
+            go (visited // { ${cid} = true; }) cid
+        ) cids;
+    in
+    go { ${id} = true; } id;
 
-  nodesByType = self: type: lib.filterAttrs (_: n: n.type == type) self.allNodes;
+  # Delegates to eval's nodesOfType (selective walk) instead of forcing allNodes.
+  nodesByType = self: type: self.nodesOfType type;
 in
 {
   inherit
