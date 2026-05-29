@@ -1,14 +1,14 @@
-{ lib, engine, ... }:
+{ lib, genScope, ... }:
 let
-  inherit (engine) collectionAttr collectImports;
+  inherit (genScope) collectionAttr collectImports;
 
   # Tree: root → {a, b}; a imports b
-  roots = engine.buildNodes {
-    parentGraph = engine.overlays [
-      (engine.edge "a" "root")
-      (engine.edge "b" "root")
+  roots = genScope.buildNodes {
+    parentGraph = genScope.overlays [
+      (genScope.edge "a" "root")
+      (genScope.edge "b" "root")
     ];
-    importGraph = engine.edge "a" "b";
+    importGraph = genScope.edge "a" "b";
     decls = {
       root = {
         tags = [ "root-tag" ];
@@ -23,7 +23,7 @@ let
     types = { };
   };
 
-  result = engine.eval {
+  result = genScope.eval {
     inherit roots;
     attributes = {
       children = self: id: lib.filterAttrs (_: n: n.parent == id) roots;

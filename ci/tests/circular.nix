@@ -1,10 +1,10 @@
-{ lib, engine, ... }:
+{ lib, genScope, ... }:
 let
-  inherit (engine) circular;
+  inherit (genScope) circular;
 
-  roots = engine.buildNodes {
-    parentGraph = engine.vertex "node";
-    importGraph = engine.empty;
+  roots = genScope.buildNodes {
+    parentGraph = genScope.vertex "node";
+    importGraph = genScope.empty;
     decls = {
       node = {
         init-val = 0;
@@ -15,7 +15,7 @@ let
   };
 
   # Converging: increment until reaching target
-  convergingResult = engine.eval {
+  convergingResult = genScope.eval {
     inherit roots;
     attributes = {
       children = self: id: { };
@@ -37,16 +37,16 @@ let
   };
 
   # Non-converging: always changes
-  divergingRoots = engine.buildNodes {
-    parentGraph = engine.vertex "div";
-    importGraph = engine.empty;
+  divergingRoots = genScope.buildNodes {
+    parentGraph = genScope.vertex "div";
+    importGraph = genScope.empty;
     decls = {
       div = { };
     };
     types = { };
   };
 
-  divergingResult = engine.eval {
+  divergingResult = genScope.eval {
     roots = divergingRoots;
     attributes = {
       children = self: id: { };
@@ -65,7 +65,7 @@ let
   };
 
   # Custom equality
-  customEqResult = engine.eval {
+  customEqResult = genScope.eval {
     inherit roots;
     attributes = {
       children = self: id: { };

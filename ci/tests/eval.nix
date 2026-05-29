@@ -1,9 +1,9 @@
-{ lib, engine, ... }:
+{ lib, genScope, ... }:
 let
   # Minimal graph: two roots, a and b
-  roots = engine.buildNodes {
-    parentGraph = engine.edge "child" "parent";
-    importGraph = engine.empty;
+  roots = genScope.buildNodes {
+    parentGraph = genScope.edge "child" "parent";
+    importGraph = genScope.empty;
     decls = {
       parent = {
         x = 1;
@@ -19,7 +19,7 @@ let
     };
   };
 
-  result = engine.eval {
+  result = genScope.eval {
     inherit roots;
     attributes = {
       children =
@@ -41,9 +41,9 @@ let
   };
 
   # Single root, no children
-  singleRoots = engine.buildNodes {
-    parentGraph = engine.vertex "solo";
-    importGraph = engine.empty;
+  singleRoots = genScope.buildNodes {
+    parentGraph = genScope.vertex "solo";
+    importGraph = genScope.empty;
     decls = {
       solo = {
         val = 42;
@@ -54,7 +54,7 @@ let
     };
   };
 
-  singleResult = engine.eval {
+  singleResult = genScope.eval {
     roots = singleRoots;
     attributes = {
       children = self: id: { };
@@ -196,7 +196,7 @@ in
               parts = lib.splitString "@" id;
             in
             if builtins.length parts > 1 then lib.concatStringsSep "@" (lib.drop 1 parts) else null;
-          result = engine.eval { inherit roots attributes parseParent; };
+          result = genScope.eval { inherit roots attributes parseParent; };
         in
         builtins.sort builtins.lessThan (builtins.attrNames (result.subtreeOf "env:prod"));
       expected = [
@@ -245,7 +245,7 @@ in
               parts = lib.splitString "@" id;
             in
             if builtins.length parts > 1 then lib.concatStringsSep "@" (lib.drop 1 parts) else null;
-          result = engine.eval { inherit roots attributes parseParent; };
+          result = genScope.eval { inherit roots attributes parseParent; };
         in
         builtins.sort builtins.lessThan (builtins.attrNames (result.nodesOfType "host"));
       expected = [
@@ -303,7 +303,7 @@ in
               parts = lib.splitString "@" id;
             in
             if builtins.length parts > 1 then lib.concatStringsSep "@" (lib.drop 1 parts) else null;
-          result = engine.eval { inherit roots attributes parseParent; };
+          result = genScope.eval { inherit roots attributes parseParent; };
         in
         builtins.sort builtins.lessThan (
           builtins.attrNames (result.allNodesWhere (n: n.decls.secure or false))

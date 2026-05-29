@@ -10,7 +10,7 @@
 #     |
 #   resolved user                       <- enable + systemGroups derived from above
 {
-  engine,
+  genScope,
   lib,
   groups,
   environments,
@@ -21,27 +21,27 @@ let
   hostNames = builtins.attrNames hosts;
   envNames = builtins.attrNames environments;
 
-  roots = engine.buildNodes {
+  roots = genScope.buildNodes {
     # Parent edges: hosts -> environments -> root
-    parentGraph = engine.overlays (
-      [ (engine.star "root" (map (e: "env:${e}") envNames)) ]
-      ++ map (host: engine.edge "host:${host}" "env:${hosts.${host}.environment}") hostNames
+    parentGraph = genScope.overlays (
+      [ (genScope.star "root" (map (e: "env:${e}") envNames)) ]
+      ++ map (host: genScope.edge "host:${host}" "env:${hosts.${host}.environment}") hostNames
     );
 
     # M edges: group-to-group membership (transitive).
     # "users" has members = ["admins"], meaning admins are members of users.
     # M edge FROM member TO group: member inherits group's privileges.
     edgeGraphs = {
-      M = engine.overlays (
+      M = genScope.overlays (
         (lib.concatMap (
           gname:
           let
             g = groups.${gname};
           in
-          map (member: engine.edge "group:${member}" "group:${gname}") g.members
+          map (member: genScope.edge "group:${member}" "group:${gname}") g.members
         ) groupNames)
         # Ensure ALL groups exist as vertices even if they have no membership edges.
-        ++ [ (engine.vertices (map (g: "group:${g}") groupNames)) ]
+        ++ [ (genScope.vertices (map (g: "group:${g}") groupNames)) ]
       );
     };
 

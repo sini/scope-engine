@@ -2,7 +2,7 @@
 #
 # JOINs are resolved via FK field lookup in instance registries.
 # WHERE predicates filter rows. ORDER BY sorts. LIMIT truncates.
-{ lib, selectLib }:
+{ lib, genSelect }:
 let
   # Kind name normalization: SQL uses plural/underscored table names,
   # fleet data uses singular/hyphenated kind names.
@@ -60,7 +60,7 @@ let
     else
       raw;
 
-  sel = selectLib;
+  sel = genSelect;
 
   # Convert SQL LIKE pattern to Nix regex: % → .*, _ → ., escape rest
   likeToRegex =
@@ -346,7 +346,7 @@ let
           selector = astToSelector item.aliases ast.where;
           ctx = mkRowContext item.row;
         in
-        selectLib.matches selector "row" ctx
+        genSelect.matches selector "row" ctx
       ) joinedRows;
 
       # Project columns

@@ -18,25 +18,25 @@
 #   ai-assist      — global=false, depends on new-editor
 #   beta-features  — global=false, org:widgets=true
 #   max-items      — global=50, project:alpha=100
-{ engine, lib }:
+{ genScope, lib }:
 let
-  roots = engine.buildNodes {
-    parentGraph = engine.overlays [
-      (engine.star "global" [
+  roots = genScope.buildNodes {
+    parentGraph = genScope.overlays [
+      (genScope.star "global" [
         "org:acme"
         "org:widgets"
       ])
-      (engine.star "org:acme" [
+      (genScope.star "org:acme" [
         "project:alpha"
         "project:beta"
       ])
-      (engine.star "project:alpha" [
+      (genScope.star "project:alpha" [
         "user:alice"
         "user:bob"
       ])
-      (engine.edge "user:carol" "project:beta")
-      (engine.edge "project:gamma" "org:widgets")
-      (engine.edge "user:dave" "project:gamma")
+      (genScope.edge "user:carol" "project:beta")
+      (genScope.edge "project:gamma" "org:widgets")
+      (genScope.edge "user:dave" "project:gamma")
     ];
     decls = {
       global = {

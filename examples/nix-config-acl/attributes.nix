@@ -1,6 +1,6 @@
 # ACL resolution attributes.
 {
-  engine,
+  genScope,
   lib,
   roots,
 }:
@@ -10,7 +10,7 @@ let
   transitiveGroups =
     self: groupId:
     let
-      direct = engine.followEdge "M" self groupId;
+      direct = genScope.followEdge "M" self groupId;
       transitive = lib.concatMap (gid: transitiveGroups self gid) direct;
     in
     lib.unique ([ groupId ] ++ direct ++ transitive);
@@ -35,7 +35,7 @@ in
       lib.unique (envGates ++ hostGates);
 
     # For a given user on a given host, resolve full access.
-    resolveUser = engine.paramAttr (
+    resolveUser = genScope.paramAttr (
       self: hostId: userName:
       let
         hostNode = self.node hostId;

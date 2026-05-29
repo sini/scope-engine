@@ -1,9 +1,9 @@
 # Feature flag attributes.
-{ engine, lib }:
+{ genScope, lib }:
 {
-  flag = engine.paramAttr (
+  flag = genScope.paramAttr (
     self: id: flagName:
-    engine.query {
+    genScope.query {
       dataFilter = node: node.decls.${flagName} or null;
     } self id
   );
@@ -14,9 +14,9 @@
       node = self.node id;
       parentFlags = if node.parent != null then self.get node.parent "effectiveFlags" else { };
     in
-    engine.shadow (builtins.removeAttrs node.decls [ "__edges" ]) parentFlags;
+    genScope.shadow (builtins.removeAttrs node.decls [ "__edges" ]) parentFlags;
 
-  flagWithDeps = engine.paramAttr (
+  flagWithDeps = genScope.paramAttr (
     self: id: flagName:
     let
       raw = self.get id "flag" flagName;
@@ -42,7 +42,7 @@
     );
 
   # Circular attribute: rollout convergence (Sloane 2010 §2.2).
-  rolloutPct = engine.circular { init = 0; } (
+  rolloutPct = genScope.circular { init = 0; } (
     self: id: prev:
     let
       target = 100;

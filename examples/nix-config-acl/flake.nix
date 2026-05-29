@@ -8,14 +8,14 @@
     { gen-scope, nixpkgs, ... }:
     let
       lib = nixpkgs.lib;
-      engine = gen-scope { inherit lib; };
+      genScope = gen-scope { inherit lib; };
       groups = import ./data/groups.nix;
       environments = import ./data/environments.nix;
       hosts = import ./data/hosts.nix;
       inherit
         (import ./graph.nix {
           inherit
-            engine
+            genScope
             lib
             groups
             environments
@@ -24,14 +24,14 @@
         })
         roots
         ;
-      inherit (import ./attributes.nix { inherit engine lib roots; }) attributes;
-      result = engine.eval { inherit roots attributes; };
+      inherit (import ./attributes.nix { inherit genScope lib roots; }) attributes;
+      result = genScope.eval { inherit roots attributes; };
       resolveOn = host: user: result.get "host:${host}" "resolveUser" user;
     in
     {
       tests = import ./tests.nix {
         inherit
-          engine
+          genScope
           lib
           result
           resolveOn

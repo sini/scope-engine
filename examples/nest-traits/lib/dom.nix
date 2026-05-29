@@ -1,4 +1,4 @@
-{ lib, engine }:
+{ lib, genScope }:
 let
   mkPath = prefix: key: if prefix == "" then key else "${prefix}.${key}";
 
@@ -47,11 +47,11 @@ let
     let
       nodeIds = map (n: n.__path) nodes;
       parentEdges = builtins.filter (e: e != null) (
-        map (n: if n.__parentPath != null then engine.edge n.__path n.__parentPath else null) nodes
+        map (n: if n.__parentPath != null then genScope.edge n.__path n.__parentPath else null) nodes
       );
     in
-    engine.buildNodes {
-      parentGraph = engine.overlays ([ (engine.vertices nodeIds) ] ++ parentEdges);
+    genScope.buildNodes {
+      parentGraph = genScope.overlays ([ (genScope.vertices nodeIds) ] ++ parentEdges);
       decls = builtins.listToAttrs (
         map (n: {
           name = n.__path;

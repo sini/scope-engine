@@ -1,6 +1,6 @@
 # Feature flag tests.
 {
-  engine,
+  genScope,
   lib,
   result,
 }:
@@ -45,13 +45,15 @@
   rollout-stage = (result.node "rollout:org:widgets").decls.stage;
   rollout-converged = result.get "global" "rolloutPct";
 
-  all-users = builtins.sort builtins.lessThan (builtins.attrNames (engine.nodesByType result "user"));
-  all-orgs = builtins.sort builtins.lessThan (builtins.attrNames (engine.nodesByType result "org"));
-  rollout-nodes = builtins.attrNames (engine.nodesByType result "rollout");
+  all-users = builtins.sort builtins.lessThan (
+    builtins.attrNames (genScope.nodesByType result "user")
+  );
+  all-orgs = builtins.sort builtins.lessThan (builtins.attrNames (genScope.nodesByType result "org"));
+  rollout-nodes = builtins.attrNames (genScope.nodesByType result "rollout");
 
-  alice-path = engine.ancestors result "user:alice";
-  acme-projects = builtins.sort builtins.lessThan (engine.childrenIds result "org:acme");
-  alpha-users = builtins.sort builtins.lessThan (engine.childrenIds result "project:alpha");
-  is-alice-under-acme = engine.isAncestor result "org:acme" "user:alice";
-  is-dave-under-acme = engine.isAncestor result "org:acme" "user:dave";
+  alice-path = genScope.ancestors result "user:alice";
+  acme-projects = builtins.sort builtins.lessThan (genScope.childrenIds result "org:acme");
+  alpha-users = builtins.sort builtins.lessThan (genScope.childrenIds result "project:alpha");
+  is-alice-under-acme = genScope.isAncestor result "org:acme" "user:alice";
+  is-dave-under-acme = genScope.isAncestor result "org:acme" "user:dave";
 }

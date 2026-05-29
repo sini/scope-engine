@@ -8,15 +8,15 @@
     { gen-scope, nixpkgs, ... }:
     let
       lib = nixpkgs.lib;
-      engine = gen-scope { inherit lib; };
-      inherit (import ./graph.nix { inherit engine lib; }) roots;
-      inherit (import ./attributes.nix { inherit engine lib roots; }) rolePermissions attributes;
-      result = engine.eval { inherit roots attributes; };
+      genScope = gen-scope { inherit lib; };
+      inherit (import ./graph.nix { inherit genScope lib; }) roots;
+      inherit (import ./attributes.nix { inherit genScope lib roots; }) rolePermissions attributes;
+      result = genScope.eval { inherit roots attributes; };
     in
     {
       tests = import ./tests.nix {
         inherit
-          engine
+          genScope
           lib
           result
           rolePermissions

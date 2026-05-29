@@ -1,4 +1,4 @@
-{ lib, engine }:
+{ lib, genScope }:
 let
   css = import ./css.nix;
 

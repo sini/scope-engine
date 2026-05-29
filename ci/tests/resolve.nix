@@ -1,6 +1,6 @@
-{ lib, engine, ... }:
+{ lib, genScope, ... }:
 let
-  inherit (engine)
+  inherit (genScope)
     shadow
     resolve
     inherit'
@@ -105,9 +105,9 @@ in
 
     test-inherit-walks-parent =
       let
-        roots = engine.buildNodes {
-          parentGraph = engine.edge "child" "parent";
-          importGraph = engine.empty;
+        roots = genScope.buildNodes {
+          parentGraph = genScope.edge "child" "parent";
+          importGraph = genScope.empty;
           decls = {
             parent = {
               val = "found";
@@ -116,7 +116,7 @@ in
           };
           types = { };
         };
-        result = engine.eval {
+        result = genScope.eval {
           inherit roots;
           attributes = {
             children = self: id: lib.filterAttrs (_: n: n.parent == id) roots;
@@ -135,12 +135,12 @@ in
 
     test-inherit-stops-at-first =
       let
-        roots = engine.buildNodes {
-          parentGraph = engine.overlays [
-            (engine.edge "c" "b")
-            (engine.edge "b" "a")
+        roots = genScope.buildNodes {
+          parentGraph = genScope.overlays [
+            (genScope.edge "c" "b")
+            (genScope.edge "b" "a")
           ];
-          importGraph = engine.empty;
+          importGraph = genScope.empty;
           decls = {
             a = {
               val = "root";
@@ -152,7 +152,7 @@ in
           };
           types = { };
         };
-        result = engine.eval {
+        result = genScope.eval {
           inherit roots;
           attributes = {
             children = self: id: lib.filterAttrs (_: n: n.parent == id) roots;
@@ -171,12 +171,12 @@ in
 
     test-inheritAll-accumulates =
       let
-        roots = engine.buildNodes {
-          parentGraph = engine.overlays [
-            (engine.edge "c" "b")
-            (engine.edge "b" "a")
+        roots = genScope.buildNodes {
+          parentGraph = genScope.overlays [
+            (genScope.edge "c" "b")
+            (genScope.edge "b" "a")
           ];
-          importGraph = engine.empty;
+          importGraph = genScope.empty;
           decls = {
             a = {
               tags = [ "root" ];
@@ -190,7 +190,7 @@ in
           };
           types = { };
         };
-        result = engine.eval {
+        result = genScope.eval {
           inherit roots;
           attributes = {
             children = self: id: lib.filterAttrs (_: n: n.parent == id) roots;

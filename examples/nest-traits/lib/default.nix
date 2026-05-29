@@ -1,21 +1,21 @@
 {
   lib,
-  engine,
-  schemaLib,
+  genScope,
+  genSchema,
   aspects,
-  genLib,
+  genAlgebra,
 }:
 let
   css = import ./css.nix;
-  selectorsLib = import ./selectors.nix { inherit lib engine; };
-  dom = import ./dom.nix { inherit lib engine; };
+  selectorsLib = import ./selectors.nix { inherit lib genScope; };
+  dom = import ./dom.nix { inherit lib genScope; };
   traitsLib = import ./traits.nix {
-    inherit lib engine selectorsLib;
+    inherit lib genScope selectorsLib;
   };
   enginePipeline = import ./engine.nix {
     inherit
       lib
-      engine
+      genScope
       dom
       selectorsLib
       traitsLib
@@ -43,7 +43,7 @@ in
     (import ./setup.nix {
       inherit
         lib
-        schemaLib
+        genSchema
         aspects
         selectorsLib
         ;

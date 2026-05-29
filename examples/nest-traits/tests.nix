@@ -1,11 +1,11 @@
 {
   lib,
-  engine,
+  genScope,
   nest,
-  schemaLib,
+  genSchema,
   aspects,
-  genLib,
-  graphLib,
+  genAlgebra,
+  genGraph,
 }:
 {
   smoke = {
@@ -619,7 +619,7 @@
       };
     };
 
-  engine-tests =
+  genScope-tests =
     let
       mockNixos = _select: modules: {
         _type = "nixos";
@@ -1656,14 +1656,14 @@
     in
     {
       test-node-count = {
-        expr = graphLib.sizeNodes nodes;
+        expr = genGraph.sizeNodes nodes;
         expected = 3;
       };
 
       test-select-web-nodes = {
         expr =
           let
-            webNodes = graphLib.select nodes (node: builtins.any (t: t.name == "web") (node.decls.is or [ ]));
+            webNodes = genGraph.select nodes (node: builtins.any (t: t.name == "web") (node.decls.is or [ ]));
           in
           builtins.sort builtins.lessThan (builtins.attrNames webNodes);
         expected = [
@@ -1675,14 +1675,14 @@
       test-select-lb-node = {
         expr =
           let
-            lbNodes = graphLib.select nodes (node: builtins.any (t: t.name == "lb") (node.decls.is or [ ]));
+            lbNodes = genGraph.select nodes (node: builtins.any (t: t.name == "lb") (node.decls.is or [ ]));
           in
           builtins.attrNames lbNodes;
         expected = [ "prod.lb" ];
       };
 
       test-all-nodes-are-leaves = {
-        expr = builtins.sort builtins.lessThan (graphLib.leaves nodes);
+        expr = builtins.sort builtins.lessThan (genGraph.leaves nodes);
         expected = [
           "prod.lb"
           "prod.web-1"
@@ -1691,7 +1691,7 @@
       };
 
       test-no-cycles = {
-        expr = graphLib.cycles nodes;
+        expr = genGraph.cycles nodes;
         expected = [ ];
       };
 
@@ -1714,38 +1714,38 @@
               };
             };
             nestedGraph = buildDomGraph nestedNodes;
-            edgeSet = graphLib.fromEdges nestedGraph;
-            pEdges = graphLib.selectEdges edgeSet (e: e.label == "P");
+            edgeSet = genGraph.fromEdges nestedGraph;
+            pEdges = genGraph.selectEdges edgeSet (e: e.label == "P");
           in
-          graphLib.sizeEdges pEdges;
+          genGraph.sizeEdges pEdges;
         expected = 1;
       };
 
       test-flat-dom-no-parent-edges = {
         expr =
           let
-            edgeSet = graphLib.fromEdges nodes;
+            edgeSet = genGraph.fromEdges nodes;
           in
-          graphLib.sizeEdges edgeSet;
+          genGraph.sizeEdges edgeSet;
         expected = 0;
       };
 
       test-import-graph-reachable = {
         expr =
           let
-            importNodes = engine.buildNodes {
-              importGraph = engine.overlays [
-                (engine.vertices [
+            importNodes = genScope.buildNodes {
+              importGraph = genScope.overlays [
+                (genScope.vertices [
                   "lb"
                   "web-1"
                   "web-2"
                 ])
-                (engine.edge "lb" "web-1")
-                (engine.edge "lb" "web-2")
+                (genScope.edge "lb" "web-1")
+                (genScope.edge "lb" "web-2")
               ];
             };
           in
-          builtins.sort builtins.lessThan (graphLib.reachableFrom importNodes "lb");
+          builtins.sort builtins.lessThan (genGraph.reachableFrom importNodes "lb");
         expected = [
           "web-1"
           "web-2"
@@ -1755,19 +1755,19 @@
       test-import-graph-dependents = {
         expr =
           let
-            importNodes = engine.buildNodes {
-              importGraph = engine.overlays [
-                (engine.vertices [
+            importNodes = genScope.buildNodes {
+              importGraph = genScope.overlays [
+                (genScope.vertices [
                   "lb"
                   "web-1"
                   "web-2"
                 ])
-                (engine.edge "lb" "web-1")
-                (engine.edge "lb" "web-2")
+                (genScope.edge "lb" "web-1")
+                (genScope.edge "lb" "web-2")
               ];
             };
           in
-          graphLib.dependents importNodes "web-1";
+          genGraph.dependents importNodes "web-1";
         expected = [ "lb" ];
       };
     };

@@ -1,13 +1,13 @@
-{ lib, engine, ... }:
+{ lib, genScope, ... }:
 let
-  inherit (engine) query queryAll ambiguous;
+  inherit (genScope) query queryAll ambiguous;
 
   # Graph: a imports b, b imports c. Parent: a → root.
-  roots = engine.buildNodes {
-    parentGraph = engine.edge "a" "root";
-    importGraph = engine.overlays [
-      (engine.edge "a" "b")
-      (engine.edge "b" "c")
+  roots = genScope.buildNodes {
+    parentGraph = genScope.edge "a" "root";
+    importGraph = genScope.overlays [
+      (genScope.edge "a" "b")
+      (genScope.edge "b" "c")
     ];
     decls = {
       root = {
@@ -25,7 +25,7 @@ let
     types = { };
   };
 
-  result = engine.eval {
+  result = genScope.eval {
     inherit roots;
     attributes = {
       children = self: id: lib.filterAttrs (_: n: n.parent == id) roots;
@@ -37,7 +37,7 @@ let
     parseParent = id: (roots.${id} or { parent = null; }).parent;
   };
 
-  resultTransitive = engine.eval {
+  resultTransitive = genScope.eval {
     inherit roots;
     attributes = {
       children = self: id: lib.filterAttrs (_: n: n.parent == id) roots;
@@ -50,7 +50,7 @@ let
     parseParent = id: (roots.${id} or { parent = null; }).parent;
   };
 
-  resultAll = engine.eval {
+  resultAll = genScope.eval {
     inherit roots;
     attributes = {
       children = self: id: lib.filterAttrs (_: n: n.parent == id) roots;
@@ -63,11 +63,11 @@ let
   };
 
   # Ambiguity: node imports two nodes with same key
-  ambRoots = engine.buildNodes {
-    parentGraph = engine.empty;
-    importGraph = engine.overlays [
-      (engine.edge "x" "y")
-      (engine.edge "x" "z")
+  ambRoots = genScope.buildNodes {
+    parentGraph = genScope.empty;
+    importGraph = genScope.overlays [
+      (genScope.edge "x" "y")
+      (genScope.edge "x" "z")
     ];
     decls = {
       x = { };
@@ -81,7 +81,7 @@ let
     types = { };
   };
 
-  ambResult = engine.eval {
+  ambResult = genScope.eval {
     roots = ambRoots;
     attributes = {
       children = self: id: { };

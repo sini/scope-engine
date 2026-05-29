@@ -6,7 +6,7 @@
 # nest uses CSS selectors to pick config → host, this uses SQL queries.
 {
   lib,
-  bindLib,
+  genBind,
 }:
 let
   # Find services running on a server
@@ -159,13 +159,13 @@ let
     let
       server = fleet.server.${serverName};
     in
-    bindLib.wrap {
+    genBind.wrap {
       module = serverModuleFn;
       bindings = {
         inherit fleet serverName server;
       };
       contracts = {
-        server = bindLib.contract.hasFields [
+        server = genBind.contract.hasFields [
           "hostname"
           "os"
           "cores"

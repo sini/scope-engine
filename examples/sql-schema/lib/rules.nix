@@ -7,18 +7,18 @@
 #   config     — nixos actions collect NixOS module fragments
 {
   lib,
-  deriveLib,
-  selectLib,
+  genDerive,
+  genSelect,
 }:
 let
-  inherit (deriveLib)
+  inherit (genDerive)
     mkRule
     fixpoint
     entryAnywhere
     entryAfter
     mkActions
     ;
-  match = deriveLib.adapters.select.mkMatch selectLib;
+  match = genDerive.adapters.select.mkMatch genSelect;
 
   # Action vocabulary: two phases
   fx = mkActions {

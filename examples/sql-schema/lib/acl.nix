@@ -6,14 +6,14 @@
 #   transitive: gen-graph reachableFrom to walk dependency graph
 {
   lib,
-  graphLib,
+  genGraph,
   instanceNodes,
 }:
 let
   # Bidirectional instance graph: union forward + reversed edges
   biInstanceNodes =
     let
-      rev = graphLib.transpose instanceNodes;
+      rev = genGraph.transpose instanceNodes;
     in
     {
       edges = id: (instanceNodes.edges id) ++ (rev.edges id);
@@ -100,7 +100,7 @@ let
             ) (builtins.attrNames services);
             # Walk service dependencies via bidirectional instance graph
             reachable = builtins.concatMap (
-              svc: graphLib.reachableFrom biInstanceNodes "service:${svc}"
+              svc: genGraph.reachableFrom biInstanceNodes "service:${svc}"
             ) onServerServices;
             reachableServices = lib.unique (
               onServerServices

@@ -1,6 +1,6 @@
 # RBAC tests.
 {
-  engine,
+  genScope,
   lib,
   result,
   rolePermissions,
@@ -64,22 +64,26 @@
   doc1-sensitivity = result.get "doc-1" "sensitivity";
   doc3-sensitivity = result.get "doc-3" "sensitivity";
   org-sensitivity = result.get "org" "sensitivity";
-  project-x-docs = builtins.sort builtins.lessThan (engine.childrenIds result "project-x");
-  doc1-ancestors = engine.ancestors result "doc-1";
+  project-x-docs = builtins.sort builtins.lessThan (genScope.childrenIds result "project-x");
+  doc1-ancestors = genScope.ancestors result "doc-1";
 
-  all-users = builtins.sort builtins.lessThan (builtins.attrNames (engine.nodesByType result "user"));
-  all-roles = builtins.sort builtins.lessThan (builtins.attrNames (engine.nodesByType result "role"));
-  all-resources = builtins.sort builtins.lessThan (
-    builtins.attrNames (engine.nodesByType result "resource")
+  all-users = builtins.sort builtins.lessThan (
+    builtins.attrNames (genScope.nodesByType result "user")
   );
-  bob-role-count = builtins.length (engine.followEdge "A" result "bob");
-  alice-role-count = builtins.length (engine.followEdge "A" result "alice");
+  all-roles = builtins.sort builtins.lessThan (
+    builtins.attrNames (genScope.nodesByType result "role")
+  );
+  all-resources = builtins.sort builtins.lessThan (
+    builtins.attrNames (genScope.nodesByType result "resource")
+  );
+  bob-role-count = builtins.length (genScope.followEdge "A" result "bob");
+  alice-role-count = builtins.length (genScope.followEdge "A" result "alice");
 
   # collectByType: all roles via typed collection
   role-names-via-collect = builtins.sort builtins.lessThan (
-    engine.collectByType "role" (self: id: [ id ]) result
+    genScope.collectByType "role" (self: id: [ id ]) result
   );
 
   # collectByLabel: alice's role names via A edges
-  alice-roles-via-label = engine.collectByLabel "A" (self: id: [ id ]) result "alice";
+  alice-roles-via-label = genScope.collectByLabel "A" (self: id: [ id ]) result "alice";
 }

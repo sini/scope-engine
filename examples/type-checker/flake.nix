@@ -10,15 +10,15 @@
     { gen-scope, nixpkgs, ... }:
     let
       lib = nixpkgs.lib;
-      engine = gen-scope { inherit lib; };
-      graph = import ./graph.nix { inherit engine lib; };
-      attributes = import ./attributes.nix { inherit engine lib; };
-      result = engine.eval {
+      genScope = gen-scope { inherit lib; };
+      graph = import ./graph.nix { inherit genScope lib; };
+      attributes = import ./attributes.nix { inherit genScope lib; };
+      result = genScope.eval {
         inherit (graph) roots;
         attributes = graph.mkAttributes graph.roots attributes;
       };
     in
     {
-      tests = import ./tests.nix { inherit engine lib result; };
+      tests = import ./tests.nix { inherit genScope lib result; };
     };
 }

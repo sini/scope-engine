@@ -1,13 +1,13 @@
-{ lib, engine, ... }:
+{ lib, genScope, ... }:
 let
   # Multi-level: env → host → user
-  roots = engine.buildNodes {
-    parentGraph = engine.overlays [
-      (engine.edge "host1" "env")
-      (engine.edge "user1" "host1")
-      (engine.edge "user2" "host1")
+  roots = genScope.buildNodes {
+    parentGraph = genScope.overlays [
+      (genScope.edge "host1" "env")
+      (genScope.edge "user1" "host1")
+      (genScope.edge "user2" "host1")
     ];
-    importGraph = engine.empty;
+    importGraph = genScope.empty;
     decls = {
       env = {
         name = "production";
@@ -30,7 +30,7 @@ let
     };
   };
 
-  result = engine.eval {
+  result = genScope.eval {
     inherit roots;
     attributes = {
       children = self: id: lib.filterAttrs (_: n: n.parent == id) roots;
@@ -46,9 +46,9 @@ let
   };
 
   # Derived children: proxy nodes synthesized conditionally
-  proxyRoots = engine.buildNodes {
-    parentGraph = engine.edge "svc" "cluster";
-    importGraph = engine.empty;
+  proxyRoots = genScope.buildNodes {
+    parentGraph = genScope.edge "svc" "cluster";
+    importGraph = genScope.empty;
     decls = {
       cluster = {
         proxy = true;
@@ -63,7 +63,7 @@ let
     };
   };
 
-  proxyResult = engine.eval {
+  proxyResult = genScope.eval {
     roots = proxyRoots;
     attributes = {
       children = self: id: lib.filterAttrs (_: n: n.parent == id) proxyRoots;

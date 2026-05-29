@@ -12,10 +12,10 @@
 #   ├── lib-json@2.0    ← conflict: app wants 1.x, but exists
 #   ├── lib-tls@1.2
 #   └── lib-logging@3.1 → depends on: lib-json@1.x
-{ engine, lib }:
+{ genScope, lib }:
 let
-  roots = engine.buildNodes {
-    parentGraph = engine.star "workspace" [
+  roots = genScope.buildNodes {
+    parentGraph = genScope.star "workspace" [
       "app@1.0"
       "lib-http@2.3"
       "lib-json@1.5"
@@ -23,16 +23,16 @@ let
       "lib-tls@1.2"
       "lib-logging@3.1"
     ];
-    importGraph = engine.overlays [
-      (engine.edge "app@1.0" "lib-http@2.3")
-      (engine.edge "app@1.0" "lib-json@1.5")
-      (engine.edge "lib-http@2.3" "lib-json@1.5")
-      (engine.edge "lib-http@2.3" "lib-tls@1.2")
-      (engine.edge "lib-logging@3.1" "lib-json@1.5")
+    importGraph = genScope.overlays [
+      (genScope.edge "app@1.0" "lib-http@2.3")
+      (genScope.edge "app@1.0" "lib-json@1.5")
+      (genScope.edge "lib-http@2.3" "lib-json@1.5")
+      (genScope.edge "lib-http@2.3" "lib-tls@1.2")
+      (genScope.edge "lib-logging@3.1" "lib-json@1.5")
     ];
     edgeGraphs = {
       # D = devDependency (separate from runtime deps)
-      D = engine.edge "app@1.0" "lib-logging@3.1";
+      D = genScope.edge "app@1.0" "lib-logging@3.1";
     };
     decls = {
       workspace = {

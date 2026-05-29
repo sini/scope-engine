@@ -1,16 +1,16 @@
 # Type checker tests.
 {
-  engine,
+  genScope,
   lib,
   result,
 }:
 {
   # --- Structural subtyping (van Antwerpen 2018 §2.3) ------------
 
-  point2d-subtype-of-point3d = engine.subtypeOf { } result "Point2D" "Point3D";
-  point3d-not-subtype-of-point2d = engine.subtypeOf { } result "Point3D" "Point2D";
-  color-not-subtype-of-point3d = engine.subtypeOf { } result "Color" "Point3D";
-  point2d-value-subtype = engine.subtypeOf {
+  point2d-subtype-of-point3d = genScope.subtypeOf { } result "Point2D" "Point3D";
+  point3d-not-subtype-of-point2d = genScope.subtypeOf { } result "Point3D" "Point2D";
+  color-not-subtype-of-point3d = genScope.subtypeOf { } result "Color" "Point3D";
+  point2d-value-subtype = genScope.subtypeOf {
     eq =
       _k: a: b:
       a == b;
@@ -69,18 +69,18 @@
   pair-type = (result.node "Pair<Num,String>").type;
 
   all-records = builtins.sort builtins.lessThan (
-    builtins.attrNames (engine.nodesByType result "record")
+    builtins.attrNames (genScope.nodesByType result "record")
   );
 
   # --- Custom edge labels ----------------------------------------
 
-  r-edges = engine.followEdge "R" result "NamedPoint";
-  e-edges = engine.followEdge "E" result "Circle";
-  no-e-on-record = engine.followEdge "E" result "Point2D";
+  r-edges = genScope.followEdge "R" result "NamedPoint";
+  e-edges = genScope.followEdge "E" result "Circle";
+  no-e-on-record = genScope.followEdge "E" result "Point2D";
 
   # --- Ambiguity --------------------------------------------------
 
-  name-not-ambiguous = engine.ambiguous {
+  name-not-ambiguous = genScope.ambiguous {
     dataFilter = n: n.decls.name or null;
   } result "NamedPoint";
 }

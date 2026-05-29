@@ -8,12 +8,12 @@
     inputs@{ gen, nixpkgs, ... }:
     let
       inherit (nixpkgs) lib;
-      engine = import ../. { inherit lib; };
+      genScope = import ../. { inherit lib; };
     in
     gen.lib.mkCi {
       inherit inputs;
       name = "gen-scope";
       testModules = ./tests;
-      specialArgs = { inherit engine; };
+      specialArgs = { inherit genScope; };
     };
 }

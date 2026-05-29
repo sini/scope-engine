@@ -3,9 +3,9 @@
 # Uses lib.evalModules with mkSchemaOption for kind declarations and
 # mkInstanceRegistry for fleet instance registries. Refs are resolved
 # via deferred ref bindings (string keys → instance lookups).
-{ lib, schemaLib }:
+{ lib, genSchema }:
 let
-  inherit (schemaLib)
+  inherit (genSchema)
     mkSchemaOption
     mkInstanceRegistry
     mkFieldValidator

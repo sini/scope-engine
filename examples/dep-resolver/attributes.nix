@@ -1,12 +1,12 @@
 # Dependency resolver attributes.
-{ engine, lib }:
+{ genScope, lib }:
 {
   availableAPIs =
     self: id:
     let
       node = self.node id;
       own = node.decls.exports or [ ];
-      imported = engine.collectImports (self: iid: (self.node iid).decls.exports or [ ]) self id;
+      imported = genScope.collectImports (self: iid: (self.node iid).decls.exports or [ ]) self id;
     in
     lib.unique (own ++ imported);
 

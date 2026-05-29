@@ -3,7 +3,7 @@
 # rolePermissions is exported alongside attributes because tests need
 # it directly for verifying the role hierarchy resolution.
 {
-  engine,
+  genScope,
   lib,
   roots,
 }:
@@ -15,7 +15,7 @@ let
       node = self.node roleId;
       local = lib.filterAttrs (k: v: k != "__edges" && v == true) node.decls;
       inherited = lib.foldl' (acc: rid: acc // (rolePermissions self rid)) { } (
-        engine.followEdge "R" self roleId
+        genScope.followEdge "R" self roleId
       );
     in
     local // inherited;
@@ -32,19 +32,19 @@ in
 
     permissions =
       self: id:
-      lib.foldl' (acc: rid: acc // (rolePermissions self rid)) { } (engine.followEdge "A" self id);
+      lib.foldl' (acc: rid: acc // (rolePermissions self rid)) { } (genScope.followEdge "A" self id);
 
-    hasPermission = engine.paramAttr (
+    hasPermission = genScope.paramAttr (
       self: id: perm:
       (self.get id "permissions").${perm} or false
     );
 
-    isDenied = engine.paramAttr (
+    isDenied = genScope.paramAttr (
       self: id: args:
       builtins.elem args.action (((self.node id).decls.__deny or { }).${args.resource} or [ ])
     );
 
-    canAccess = engine.paramAttr (
+    canAccess = genScope.paramAttr (
       self: id: args:
       let
         hasPerm = self.get id "hasPermission" args.action;
@@ -53,6 +53,6 @@ in
       hasPerm && !denied
     );
 
-    sensitivity = engine.inherit' { resolve = node: node.decls.sensitivity or null; };
+    sensitivity = genScope.inherit' { resolve = node: node.decls.sensitivity or null; };
   };
 }

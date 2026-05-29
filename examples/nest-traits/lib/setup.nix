@@ -1,6 +1,6 @@
 {
   lib,
-  schemaLib,
+  genSchema,
   aspects,
   selectorsLib,
 }:
@@ -64,12 +64,12 @@ let
 
   traitKind = {
     options.needs = lib.mkOption {
-      type = schemaLib.setOf (schemaLib.ref "trait");
+      type = genSchema.setOf (genSchema.ref "trait");
       default = [ ];
       description = "Forward dependencies: trait refs, selectors, or strings (resolved at eval time).";
     };
     options.neededBy = lib.mkOption {
-      type = schemaLib.setOf (schemaLib.ref "trait");
+      type = genSchema.setOf (genSchema.ref "trait");
       default = [ ];
       description = "Reverse injection: trait refs, selectors, or strings (resolved at eval time).";
     };
@@ -84,7 +84,7 @@ let
       description = "Output class builders. { className = select: modules: value; }";
     };
     validators = [
-      (schemaLib.mkFieldValidator {
+      (genSchema.mkFieldValidator {
         name = "no-self-need";
         fields = [
           "name"
@@ -93,7 +93,7 @@ let
         check = { name, needs, ... }: !builtins.any (n: n.name == name) needs;
         message = "trait cannot need itself";
       })
-      (schemaLib.mkFieldValidator {
+      (genSchema.mkFieldValidator {
         name = "no-self-neededby";
         fields = [
           "name"
@@ -116,7 +116,7 @@ let
           if isSelector val then resolveSelector registry val else default;
       };
     in
-    schemaLib.mkInstanceRegistry schema.trait {
+    genSchema.mkInstanceRegistry schema.trait {
       strict = false;
       refinements = {
         name = [
@@ -165,7 +165,7 @@ let
           (
             { config, ... }:
             {
-              options.schema = schemaLib.mkSchemaOption { };
+              options.schema = genSchema.mkSchemaOption { };
               config.schema.trait = traitKind;
               options.traits = mkTraitRegistry config.schema config.traits;
               options.rules = lib.mkOption {

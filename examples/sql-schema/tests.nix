@@ -1,8 +1,8 @@
 {
   lib,
   sql,
-  schemaLib,
-  graphLib,
+  genSchema,
+  genGraph,
 }:
 let
   inherit (sql) schema fleet;
@@ -323,7 +323,7 @@ in
     test-kind-roots = {
       # Roots: kinds with no incoming import edges
       expr = sql.kindRoots;
-      expected = graphLib.roots sql.kindNodes;
+      expected = genGraph.roots sql.kindNodes;
     };
 
     test-kind-self-ref-cycles = {
@@ -348,7 +348,7 @@ in
     };
 
     test-instance-no-cycles = {
-      expr = graphLib.cycles sql.instanceNodes;
+      expr = genGraph.cycles sql.instanceNodes;
       expected = [ ];
     };
 
@@ -375,7 +375,7 @@ in
     };
 
     test-select-servers = {
-      expr = builtins.sort builtins.lessThan (graphLib.select sql.instanceNodes (n: n.type == "server"));
+      expr = builtins.sort builtins.lessThan (genGraph.select sql.instanceNodes (n: n.type == "server"));
       expected = [
         "server:api-1"
         "server:db-1"
@@ -1586,7 +1586,7 @@ in
 
   bridge =
     let
-      sel = sql.selectLib;
+      sel = sql.genSelect;
     in
     {
       # Pipeline 1: gen-select selector → filter instance graph nodes
@@ -1618,8 +1618,8 @@ in
       test-selector-derive-dispatch = {
         expr =
           let
-            inherit (sql.deriveLib) mkRule dispatch entryAnywhere;
-            match = sql.deriveLib.adapters.select.mkMatch sel;
+            inherit (sql.genDerive) mkRule dispatch entryAnywhere;
+            match = sql.genDerive.adapters.select.mkMatch sel;
             testRule = mkRule {
               condition = sel.when (_id: ctx: builtins.elem "web" ((ctx.data _id).tags or [ ]));
               produce = _id: _ctx: [
@@ -1657,7 +1657,7 @@ in
       test-schema-graph-reachability = {
         expr =
           let
-            reachable = graphLib.reachableFrom sql.kindNodes "server";
+            reachable = genGraph.reachableFrom sql.kindNodes "server";
           in
           builtins.sort builtins.lessThan reachable;
         expected = [

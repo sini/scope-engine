@@ -21,35 +21,35 @@
 #   }
 #   module Cycle1 { import Cycle2 }
 #   module Cycle2 { import Cycle1 }
-{ engine, lib }:
+{ genScope, lib }:
 let
   # Parent edges encode lexical nesting.
-  parentGraph = engine.overlays [
-    (engine.star "root" [
+  parentGraph = genScope.overlays [
+    (genScope.star "root" [
       "Std"
       "App"
       "Cycle1"
       "Cycle2"
     ])
-    (engine.star "Std" [
+    (genScope.star "Std" [
       "Std.IO"
       "Std.Math"
       "Std.String"
     ])
-    (engine.edge "App.Sub" "App")
+    (genScope.edge "App.Sub" "App")
   ];
 
   # Import edges encode module imports.
-  importGraph = engine.overlays [
-    (engine.edge "Std.String" "Std.Math")
-    (engine.edge "App" "Std.String")
-    (engine.edge "App.Sub" "Std.IO")
+  importGraph = genScope.overlays [
+    (genScope.edge "Std.String" "Std.Math")
+    (genScope.edge "App" "Std.String")
+    (genScope.edge "App.Sub" "Std.IO")
     # Cyclic: Cycle1 ↔ Cycle2
-    (engine.edge "Cycle1" "Cycle2")
-    (engine.edge "Cycle2" "Cycle1")
+    (genScope.edge "Cycle1" "Cycle2")
+    (genScope.edge "Cycle2" "Cycle1")
   ];
 
-  roots = engine.buildNodes {
+  roots = genScope.buildNodes {
     inherit parentGraph importGraph;
     decls = {
       root = { };

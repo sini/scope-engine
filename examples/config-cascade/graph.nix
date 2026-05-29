@@ -15,26 +15,26 @@
 #   │   └── .env                  CACHE_TTL=300, REDIS_HOST=redis.internal
 #   └── infra/
 #       └── .env                  REGION=us-east-1
-{ engine }:
+{ genScope }:
 {
-  roots = engine.buildNodes {
-    parentGraph = engine.overlays [
-      (engine.star "global" [
+  roots = genScope.buildNodes {
+    parentGraph = genScope.overlays [
+      (genScope.star "global" [
         "apps"
         "shared"
         "infra"
       ])
-      (engine.star "apps" [
+      (genScope.star "apps" [
         "api"
         "web"
       ])
-      (engine.star "api" [
+      (genScope.star "api" [
         "api.staging"
         "api.test"
       ])
     ];
-    importGraph = engine.overlays [
-      (engine.edge "api" "shared")
+    importGraph = genScope.overlays [
+      (genScope.edge "api" "shared")
     ];
     decls = {
       global = {

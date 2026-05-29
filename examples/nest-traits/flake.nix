@@ -20,23 +20,23 @@
     }:
     let
       lib = nixpkgs.lib;
-      engine = gen-scope { inherit lib; };
-      genLib = gen-algebra { inherit lib; };
-      schemaLib = import "${gen-schema}/nix/lib" {
+      genScope = gen-scope { inherit lib; };
+      genAlgebra = gen-algebra { inherit lib; };
+      genSchema = import "${gen-schema}/nix/lib" {
         inherit lib;
         inputs = {
-          gen = genLib;
+          gen = genAlgebra;
         };
       };
       aspects = gen-aspects { inherit lib; };
-      graphLib = gen-graph { inherit lib; };
+      genGraph = gen-graph { inherit lib; };
       nest = import ./lib {
         inherit
           lib
-          engine
-          schemaLib
+          genScope
+          genSchema
           aspects
-          genLib
+          genAlgebra
           ;
       };
     in
@@ -45,12 +45,12 @@
       tests = import ./tests.nix {
         inherit
           lib
-          engine
+          genScope
           nest
-          schemaLib
+          genSchema
           aspects
-          genLib
-          graphLib
+          genAlgebra
+          genGraph
           ;
       };
     };

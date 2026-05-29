@@ -1,11 +1,11 @@
-{ lib, engine, ... }:
+{ lib, genScope, ... }:
 let
-  inherit (engine) evalDebug;
+  inherit (genScope) evalDebug;
 
   # Simple case: no cycles
-  roots = engine.buildNodes {
-    parentGraph = engine.vertex "a";
-    importGraph = engine.empty;
+  roots = genScope.buildNodes {
+    parentGraph = genScope.vertex "a";
+    importGraph = genScope.empty;
     decls = {
       a = {
         val = 42;
@@ -25,9 +25,9 @@ let
   };
 
   # Cycle case: a.x depends on a.y depends on a.x
-  cycleRoots = engine.buildNodes {
-    parentGraph = engine.vertex "a";
-    importGraph = engine.empty;
+  cycleRoots = genScope.buildNodes {
+    parentGraph = genScope.vertex "a";
+    importGraph = genScope.empty;
     decls = {
       a = { };
     };
@@ -46,12 +46,12 @@ let
   };
 
   # Indirect cycle: a.p → b.q → a.p
-  indirectRoots = engine.buildNodes {
-    parentGraph = engine.vertices [
+  indirectRoots = genScope.buildNodes {
+    parentGraph = genScope.vertices [
       "a"
       "b"
     ];
-    importGraph = engine.empty;
+    importGraph = genScope.empty;
     decls = {
       a = { };
       b = { };

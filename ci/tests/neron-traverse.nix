@@ -1,6 +1,6 @@
-{ lib, engine, ... }:
+{ lib, genScope, ... }:
 let
-  inherit (engine) collectionAttr;
+  inherit (genScope) collectionAttr;
 
   # Helper: standard attributes block for neron tests.
   # Every graph needs children, imports, and the neron-based vals attribute.
@@ -14,10 +14,10 @@ let
   };
 
   # --- Test 1: P-only chain (root → mid → leaf) ---
-  pOnlyRoots = engine.buildNodes {
-    parentGraph = engine.overlays [
-      (engine.edge "leaf" "mid")
-      (engine.edge "mid" "root")
+  pOnlyRoots = genScope.buildNodes {
+    parentGraph = genScope.overlays [
+      (genScope.edge "leaf" "mid")
+      (genScope.edge "mid" "root")
     ];
     decls = {
       root.val = "root-val";
@@ -26,16 +26,16 @@ let
     };
     types = { };
   };
-  pOnlyResult = engine.eval {
+  pOnlyResult = genScope.eval {
     roots = pOnlyRoots;
     attributes = mkAttrs pOnlyRoots;
     parseParent = id: (pOnlyRoots.${id} or { parent = null; }).parent;
   };
 
   # --- Test 2: I-edge graph (leaf imports dep; leaf → root via P) ---
-  iEdgeRoots = engine.buildNodes {
-    parentGraph = engine.edge "leaf" "root";
-    importGraph = engine.edge "leaf" "dep";
+  iEdgeRoots = genScope.buildNodes {
+    parentGraph = genScope.edge "leaf" "root";
+    importGraph = genScope.edge "leaf" "dep";
     decls = {
       root.val = "root-val";
       leaf.val = "leaf-val";
@@ -43,18 +43,18 @@ let
     };
     types = { };
   };
-  iEdgeResult = engine.eval {
+  iEdgeResult = genScope.eval {
     roots = iEdgeRoots;
     attributes = mkAttrs iEdgeRoots;
     parseParent = id: (iEdgeRoots.${id} or { parent = null; }).parent;
   };
 
   # --- Test 3: Diamond dedup (leaf imports a and b; a also imports b) ---
-  diamondRoots = engine.buildNodes {
-    importGraph = engine.overlays [
-      (engine.edge "leaf" "a")
-      (engine.edge "leaf" "b")
-      (engine.edge "a" "b")
+  diamondRoots = genScope.buildNodes {
+    importGraph = genScope.overlays [
+      (genScope.edge "leaf" "a")
+      (genScope.edge "leaf" "b")
+      (genScope.edge "a" "b")
     ];
     decls = {
       leaf.val = "leaf-val";
@@ -63,18 +63,18 @@ let
     };
     types = { };
   };
-  diamondResult = engine.eval {
+  diamondResult = genScope.eval {
     roots = diamondRoots;
     attributes = mkAttrs diamondRoots;
     parseParent = id: (diamondRoots.${id} or { parent = null; }).parent;
   };
 
   # --- Test 4: Parent has its own imports ---
-  parentImportsRoots = engine.buildNodes {
-    parentGraph = engine.edge "leaf" "root";
-    importGraph = engine.overlays [
-      (engine.edge "leaf" "leaf-dep")
-      (engine.edge "root" "root-dep")
+  parentImportsRoots = genScope.buildNodes {
+    parentGraph = genScope.edge "leaf" "root";
+    importGraph = genScope.overlays [
+      (genScope.edge "leaf" "leaf-dep")
+      (genScope.edge "root" "root-dep")
     ];
     decls = {
       leaf.val = "leaf-val";
@@ -84,7 +84,7 @@ let
     };
     types = { };
   };
-  parentImportsResult = engine.eval {
+  parentImportsResult = genScope.eval {
     roots = parentImportsRoots;
     attributes = mkAttrs parentImportsRoots;
     parseParent = id: (parentImportsRoots.${id} or { parent = null; }).parent;
@@ -94,14 +94,14 @@ let
   # Reuse pOnlyRoots/pOnlyResult, query at root
 
   # --- Test 6: Cycle — a imports b, b imports a, both children of root ---
-  cycleRoots = engine.buildNodes {
-    parentGraph = engine.overlays [
-      (engine.edge "a" "root")
-      (engine.edge "b" "root")
+  cycleRoots = genScope.buildNodes {
+    parentGraph = genScope.overlays [
+      (genScope.edge "a" "root")
+      (genScope.edge "b" "root")
     ];
-    importGraph = engine.overlays [
-      (engine.edge "a" "b")
-      (engine.edge "b" "a")
+    importGraph = genScope.overlays [
+      (genScope.edge "a" "b")
+      (genScope.edge "b" "a")
     ];
     decls = {
       root = {
@@ -116,17 +116,17 @@ let
     };
     types = { };
   };
-  cycleResult = engine.eval {
+  cycleResult = genScope.eval {
     roots = cycleRoots;
     attributes = mkAttrs cycleRoots;
     parseParent = id: (cycleRoots.${id} or { parent = null; }).parent;
   };
 
   # --- Test 7: Null skip — mid has no val field ---
-  nullRoots = engine.buildNodes {
-    parentGraph = engine.overlays [
-      (engine.edge "leaf" "mid")
-      (engine.edge "mid" "root")
+  nullRoots = genScope.buildNodes {
+    parentGraph = genScope.overlays [
+      (genScope.edge "leaf" "mid")
+      (genScope.edge "mid" "root")
     ];
     decls = {
       root = {
@@ -139,7 +139,7 @@ let
     };
     types = { };
   };
-  nullResult = engine.eval {
+  nullResult = genScope.eval {
     roots = nullRoots;
     attributes = mkAttrs nullRoots;
     parseParent = id: (nullRoots.${id} or { parent = null; }).parent;

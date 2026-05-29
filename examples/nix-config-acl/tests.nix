@@ -1,6 +1,6 @@
 # ACL tests -- validates resolution examples from docs/ACL.md.
 {
-  engine,
+  genScope,
   lib,
   result,
   resolveOn,
@@ -95,38 +95,42 @@
       unixGroups = r.unixGroups;
     };
 
-  admins-member-of = engine.followEdge "M" result "group:admins";
-  users-member-of = builtins.sort builtins.lessThan (engine.followEdge "M" result "group:users");
+  admins-member-of = genScope.followEdge "M" result "group:admins";
+  users-member-of = builtins.sort builtins.lessThan (genScope.followEdge "M" result "group:users");
   system-access-member-of = builtins.sort builtins.lessThan (
-    engine.followEdge "M" result "group:system-access"
+    genScope.followEdge "M" result "group:system-access"
   );
 
   all-groups = builtins.sort builtins.lessThan (
-    builtins.attrNames (engine.nodesByType result "group")
+    builtins.attrNames (genScope.nodesByType result "group")
   );
-  all-hosts = builtins.sort builtins.lessThan (builtins.attrNames (engine.nodesByType result "host"));
+  all-hosts = builtins.sort builtins.lessThan (
+    builtins.attrNames (genScope.nodesByType result "host")
+  );
   all-environments = builtins.sort builtins.lessThan (
-    builtins.attrNames (engine.nodesByType result "environment")
+    builtins.attrNames (genScope.nodesByType result "environment")
   );
 
-  cortex-env = engine.parent result "host:cortex";
-  cortex-ancestors = engine.ancestors result "host:cortex";
-  dev-box-ancestors = engine.ancestors result "host:dev-box";
-  prod-hosts = builtins.sort builtins.lessThan (engine.childrenIds result "env:prod");
+  cortex-env = genScope.parent result "host:cortex";
+  cortex-ancestors = genScope.ancestors result "host:cortex";
+  dev-box-ancestors = genScope.ancestors result "host:dev-box";
+  prod-hosts = builtins.sort builtins.lessThan (genScope.childrenIds result "env:prod");
 
   kanidm-groups = builtins.sort builtins.lessThan (
-    engine.collect { filter = n: n.type == "group" && (n.decls.scope or "") == "kanidm"; } (self: id: [
-      (self.node id).decls.name
-    ]) result
+    genScope.collect { filter = n: n.type == "group" && (n.decls.scope or "") == "kanidm"; } (
+      self: id: [
+        (self.node id).decls.name
+      ]) result
   );
   unix-groups = builtins.sort builtins.lessThan (
-    engine.collect { filter = n: n.type == "group" && (n.decls.scope or "") == "unix"; } (self: id: [
+    genScope.collect { filter = n: n.type == "group" && (n.decls.scope or "") == "unix"; } (self: id: [
       (self.node id).decls.name
     ]) result
   );
   system-groups = builtins.sort builtins.lessThan (
-    engine.collect { filter = n: n.type == "group" && (n.decls.scope or "") == "system"; } (self: id: [
-      (self.node id).decls.name
-    ]) result
+    genScope.collect { filter = n: n.type == "group" && (n.decls.scope or "") == "system"; } (
+      self: id: [
+        (self.node id).decls.name
+      ]) result
   );
 }

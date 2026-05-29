@@ -24,26 +24,26 @@
     }:
     let
       lib = nixpkgs.lib;
-      engine = gen-scope { inherit lib; };
-      genLib = gen-algebra { inherit lib; };
-      selectLib = gen-select.lib;
-      deriveLib = gen-derive.lib;
-      bindLib = gen-bind.lib;
-      schemaLib = import "${gen-schema}/nix/lib" {
+      genScope = gen-scope { inherit lib; };
+      genAlgebra = gen-algebra { inherit lib; };
+      genSelect = gen-select.lib;
+      genDerive = gen-derive.lib;
+      genBind = gen-bind.lib;
+      genSchema = import "${gen-schema}/nix/lib" {
         inherit lib;
         inputs = {
-          gen = genLib;
+          gen = genAlgebra;
         };
       };
-      graphLib = gen-graph { inherit lib; };
+      genGraph = gen-graph { inherit lib; };
       sql = import ./lib {
         inherit
           lib
-          schemaLib
-          graphLib
-          selectLib
-          deriveLib
-          bindLib
+          genSchema
+          genGraph
+          genSelect
+          genDerive
+          genBind
           ;
       };
     in
@@ -53,8 +53,8 @@
         inherit
           lib
           sql
-          schemaLib
-          graphLib
+          genSchema
+          genGraph
           ;
       };
     };

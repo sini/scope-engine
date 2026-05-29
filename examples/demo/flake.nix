@@ -10,7 +10,7 @@
     { gen-scope, nixpkgs, ... }:
     let
       lib = nixpkgs.lib;
-      engine = gen-scope { inherit lib; };
+      genScope = gen-scope { inherit lib; };
     in
     {
 
@@ -26,9 +26,9 @@
       graphPrimitives =
         let
           # Overlay: union of vertices and edges (commutative, associative, idempotent)
-          g1 = engine.overlay (engine.vertex "a") (engine.vertex "b");
+          g1 = genScope.overlay (genScope.vertex "a") (genScope.vertex "b");
           # Connect: overlay + cross-product edges from left to right
-          g2 = engine.connect (engine.vertex "a") (engine.vertex "b");
+          g2 = genScope.connect (genScope.vertex "a") (genScope.vertex "b");
         in
         {
           overlay-vertices = g1.vertices; # [ "a" "b" ]
@@ -40,32 +40,32 @@
       graphDerived =
         let
           # star: fan-in from leaves to center
-          s = engine.star "hub" [
+          s = genScope.star "hub" [
             "spoke1"
             "spoke2"
             "spoke3"
           ];
           # path: sequential chain a -> b -> c -> d
-          p = engine.path [
+          p = genScope.path [
             "a"
             "b"
             "c"
             "d"
           ];
           # circuit: path + back-edge from last to first
-          c = engine.circuit [
+          c = genScope.circuit [
             "x"
             "y"
             "z"
           ];
           # clique: fully connected -- n vertices, n*(n-1)/2 edges
-          k = engine.clique [
+          k = genScope.clique [
             "1"
             "2"
             "3"
           ];
           # tree: recursive { root, children } structure
-          t = engine.tree {
+          t = genScope.tree {
             root = "ceo";
             children = [
               {
@@ -84,7 +84,7 @@
             ];
           };
           # forest: multiple trees
-          f = engine.forest [
+          f = genScope.forest [
             {
               root = "tree-a";
               children = [
@@ -105,7 +105,7 @@
             }
           ];
           # edges: bulk construction from list
-          e = engine.edges [
+          e = genScope.edges [
             {
               from = "src";
               to = "mid";
@@ -116,19 +116,19 @@
             }
           ];
           # overlays: fold a list of graphs
-          o = engine.overlays [
-            (engine.vertex "isolated-1")
-            (engine.vertex "isolated-2")
-            (engine.edge "linked-a" "linked-b")
+          o = genScope.overlays [
+            (genScope.vertex "isolated-1")
+            (genScope.vertex "isolated-2")
+            (genScope.edge "linked-a" "linked-b")
           ];
         in
         {
           star-edge-count = builtins.length s.edges; # 3
-          path-has-chain = engine.hasEdge "b" "c" p; # true
-          circuit-has-back = engine.hasEdge "z" "x" c; # true
+          path-has-chain = genScope.hasEdge "b" "c" p; # true
+          circuit-has-back = genScope.hasEdge "z" "x" c; # true
           clique-edge-count = builtins.length k.edges; # 3
-          tree-has-depth = engine.hasEdge "team-lead" "vp-eng" t; # true
-          forest-independent = !(engine.hasEdge "tree-a" "tree-b" f); # true
+          tree-has-depth = genScope.hasEdge "team-lead" "vp-eng" t; # true
+          forest-independent = !(genScope.hasEdge "tree-a" "tree-b" f); # true
           edges-count = builtins.length e.edges; # 2
           overlays-vertex-count = builtins.length (lib.unique o.vertices); # 4
         };
@@ -136,29 +136,29 @@
       # 1c. Transformations (Mokhov 2017 §5.2-5.5)
       graphTransformations =
         let
-          g = engine.path [
+          g = genScope.path [
             "a"
             "b"
             "c"
           ];
           # gmap: rename all vertices
-          mapped = engine.gmap (v: "prefix-${v}") g;
+          mapped = genScope.gmap (v: "prefix-${v}") g;
           # transpose: flip all edges
-          flipped = engine.transpose g;
+          flipped = genScope.transpose g;
           # induce: subgraph matching predicate
-          filtered = engine.induce (v: v != "b") g;
+          filtered = genScope.induce (v: v != "b") g;
           # removeVertex: drop a vertex and its edges
-          removed = engine.removeVertex "b" g;
+          removed = genScope.removeVertex "b" g;
           # removeEdge: drop a single edge
-          snipped = engine.removeEdge "a" "b" g;
+          snipped = genScope.removeEdge "a" "b" g;
         in
         {
           gmap-vertex = builtins.head mapped.vertices; # "prefix-a"
-          transpose-reversed = engine.hasEdge "b" "a" flipped; # true
-          induce-no-b = !(engine.hasVertex "b" filtered); # true
+          transpose-reversed = genScope.hasEdge "b" "a" flipped; # true
+          induce-no-b = !(genScope.hasVertex "b" filtered); # true
           remove-vertex-no-edges = filtered.edges == [ ]; # true (both edges touched b)
-          remove-edge-keeps-bc = engine.hasEdge "b" "c" snipped; # true
-          remove-edge-drops-ab = !(engine.hasEdge "a" "b" snipped); # true
+          remove-edge-keeps-bc = genScope.hasEdge "b" "c" snipped; # true
+          remove-edge-drops-ab = !(genScope.hasEdge "a" "b" snipped); # true
         };
 
       # ===================================================================
@@ -172,22 +172,22 @@
       scopeGraphBasic =
         let
           # A university: faculties contain departments contain labs
-          parentGraph = engine.overlays [
-            (engine.star "university" [
+          parentGraph = genScope.overlays [
+            (genScope.star "university" [
               "faculty:cs"
               "faculty:math"
             ])
-            (engine.star "faculty:cs" [
+            (genScope.star "faculty:cs" [
               "dept:pl"
               "dept:systems"
             ])
-            (engine.edge "lab:types" "dept:pl")
+            (genScope.edge "lab:types" "dept:pl")
           ];
 
           # PL department imports from math faculty (cross-scope visibility)
-          importGraph = engine.edge "dept:pl" "faculty:math";
+          importGraph = genScope.edge "dept:pl" "faculty:math";
 
-          nodes = engine.buildNodes {
+          nodes = genScope.buildNodes {
             inherit parentGraph importGraph;
             decls = {
               university = {
@@ -246,18 +246,18 @@
 
       structuralQueries =
         let
-          parentGraph = engine.overlays [
-            (engine.star "root" [
+          parentGraph = genScope.overlays [
+            (genScope.star "root" [
               "a"
               "b"
             ])
-            (engine.star "a" [
+            (genScope.star "a" [
               "a1"
               "a2"
             ])
-            (engine.edge "a1x" "a1")
+            (genScope.edge "a1x" "a1")
           ];
-          nodes = engine.buildNodes {
+          nodes = genScope.buildNodes {
             inherit parentGraph;
             types = {
               root = "org";
@@ -268,7 +268,7 @@
               a1x = "pet";
             };
           };
-          result = engine.eval {
+          result = genScope.eval {
             roots = nodes;
             attributes = {
               children = _self: id: lib.filterAttrs (_: n: n.parent == id) nodes;
@@ -277,20 +277,20 @@
           };
         in
         {
-          parent = engine.parent result "a1"; # "a"
-          children = builtins.attrNames (engine.children result "a"); # [ "a1" "a2" ]
-          ancestors = engine.ancestors result "a1x"; # [ "a1" "a" "root" ]
-          siblings = engine.siblings result "a1"; # [ "a2" ]
-          descendants = builtins.sort builtins.lessThan (engine.descendants result "root");
+          parent = genScope.parent result "a1"; # "a"
+          children = builtins.attrNames (genScope.children result "a"); # [ "a1" "a2" ]
+          ancestors = genScope.ancestors result "a1x"; # [ "a1" "a" "root" ]
+          siblings = genScope.siblings result "a1"; # [ "a2" ]
+          descendants = builtins.sort builtins.lessThan (genScope.descendants result "root");
           # -> [ "a" "a1" "a1x" "a2" "b" ]
 
           # Boolean predicates
-          is-ancestor = engine.isAncestor result "root" "a1x"; # true
-          is-not-ancestor = engine.isAncestor result "b" "a1x"; # false
-          is-descendant = engine.isDescendant result "a1x" "root"; # true
+          is-ancestor = genScope.isAncestor result "root" "a1x"; # true
+          is-not-ancestor = genScope.isAncestor result "b" "a1x"; # false
+          is-descendant = genScope.isDescendant result "a1x" "root"; # true
 
           # Typed queries
-          teams = builtins.sort builtins.lessThan (builtins.attrNames (engine.nodesByType result "team"));
+          teams = builtins.sort builtins.lessThan (builtins.attrNames (genScope.nodesByType result "team"));
           # -> [ "a" "b" ]
         };
 
@@ -304,9 +304,9 @@
 
       nameResolution =
         let
-          nodes = engine.buildNodes {
-            parentGraph = engine.overlay (engine.edge "inner" "outer") (engine.edge "deep" "inner");
-            importGraph = engine.edge "inner" "lib";
+          nodes = genScope.buildNodes {
+            parentGraph = genScope.overlay (genScope.edge "inner" "outer") (genScope.edge "deep" "inner");
+            importGraph = genScope.edge "inner" "lib";
             decls = {
               outer = {
                 color = "blue";
@@ -322,7 +322,7 @@
               };
             };
           };
-          result = engine.eval {
+          result = genScope.eval {
             roots = nodes;
             attributes = {
               children = _self: id: lib.filterAttrs (_: n: n.parent == id) nodes;
@@ -333,7 +333,7 @@
         {
           # shadow (Neron §5 Def. 1): inner keys suppress outer
           shadow-merge =
-            engine.shadow
+            genScope.shadow
               {
                 a = 1;
                 b = 2;
@@ -345,7 +345,7 @@
           # -> { a = 1; b = 2; c = 3; }
 
           # resolve: specificity ordering D < I < P
-          resolve-local-wins = engine.resolve {
+          resolve-local-wins = genScope.resolve {
             local = "local";
             imported = "imported";
             inherited = "inherited";
@@ -354,22 +354,22 @@
           # query: generalized combinator (van Antwerpen §2.1)
           # inner has local color=green, import color=red, parent color=blue
           # D < I means local green wins
-          query-inner-color = engine.query {
+          query-inner-color = genScope.query {
             dataFilter = n: n.decls.color or null;
           } result "inner"; # -> "green"
 
           # deep has no local color, no imports, walks parent to inner (green)
-          query-deep-inherits = engine.query {
+          query-deep-inherits = genScope.query {
             dataFilter = n: n.decls.color or null;
           } result "deep"; # -> "green"
 
           # Import-only query: tool comes from import (lib has tool)
-          query-import-tool = engine.query {
+          query-import-tool = genScope.query {
             dataFilter = n: n.decls.tool or null;
           } result "inner"; # -> "hammer"
 
           # inherit': walks parent chain (Neron §2.3)
-          inherit-size = engine.inherit' {
+          inherit-size = genScope.inherit' {
             resolve = n: n.decls.size or null;
           } result "deep"; # -> "large" (deep -> inner -> outer)
         };
@@ -380,9 +380,9 @@
 
       ambiguityDetection =
         let
-          nodes = engine.buildNodes {
-            parentGraph = engine.edge "scope" "parent";
-            importGraph = engine.edge "scope" "imported";
+          nodes = genScope.buildNodes {
+            parentGraph = genScope.edge "scope" "parent";
+            importGraph = genScope.edge "scope" "imported";
             decls = {
               parent = {
                 name = "from-parent";
@@ -395,7 +395,7 @@
               };
             };
           };
-          result = engine.eval {
+          result = genScope.eval {
             roots = nodes;
             attributes = {
               children = _self: id: lib.filterAttrs (_: n: n.parent == id) nodes;
@@ -405,16 +405,16 @@
         in
         {
           all-reachable = builtins.sort builtins.lessThan (
-            engine.queryAll {
+            genScope.queryAll {
               dataFilter = n: n.decls.name or null;
             } result "scope"
           );
 
-          is-ambiguous = engine.ambiguous {
+          is-ambiguous = genScope.ambiguous {
             dataFilter = n: n.decls.name or null;
           } result "scope"; # -> true
 
-          not-ambiguous = engine.ambiguous {
+          not-ambiguous = genScope.ambiguous {
             dataFilter = n: n.decls.name or null;
           } result "parent"; # -> false
         };
@@ -425,13 +425,13 @@
 
       visibilityPolicies =
         let
-          nodes = engine.buildNodes {
-            parentGraph = engine.vertices [
+          nodes = genScope.buildNodes {
+            parentGraph = genScope.vertices [
               "modA"
               "modB"
               "modC"
             ];
-            importGraph = engine.overlay (engine.edge "modA" "modB") (engine.edge "modB" "modC");
+            importGraph = genScope.overlay (genScope.edge "modA" "modB") (genScope.edge "modB" "modC");
             decls = {
               modA = {
                 x = "local-A";
@@ -446,7 +446,7 @@
               };
             };
           };
-          result = engine.eval {
+          result = genScope.eval {
             roots = nodes;
             attributes = {
               children = _self: id: lib.filterAttrs (_: n: n.parent == id) nodes;
@@ -455,21 +455,21 @@
           };
         in
         {
-          non-transitive = engine.query {
+          non-transitive = genScope.query {
             dataFilter = n: n.decls.z or null;
           } result "modA";
 
-          transitive = engine.query {
+          transitive = genScope.query {
             dataFilter = n: n.decls.z or null;
             transitiveImports = true;
           } result "modA";
 
-          transitive-shadowing = engine.query {
+          transitive-shadowing = genScope.query {
             dataFilter = n: n.decls.y or null;
             transitiveImports = true;
           } result "modA";
 
-          include-semantics = engine.query {
+          include-semantics = genScope.query {
             dataFilter = n: n.decls.x or null;
             localShadowsImport = false;
           } result "modA";
@@ -481,12 +481,12 @@
 
       seenImports =
         let
-          nodes = engine.buildNodes {
-            parentGraph = engine.vertices [
+          nodes = genScope.buildNodes {
+            parentGraph = genScope.vertices [
               "a"
               "b"
             ];
-            importGraph = engine.overlay (engine.edge "a" "b") (engine.edge "b" "a");
+            importGraph = genScope.overlay (genScope.edge "a" "b") (genScope.edge "b" "a");
             decls = {
               a = {
                 val = "from-a";
@@ -496,7 +496,7 @@
               };
             };
           };
-          result = engine.eval {
+          result = genScope.eval {
             roots = nodes;
             attributes = {
               children = _self: id: lib.filterAttrs (_: n: n.parent == id) nodes;
@@ -505,11 +505,11 @@
           };
         in
         {
-          a-resolves = engine.query {
+          a-resolves = genScope.query {
             dataFilter = n: n.decls.val or null;
           } result "a";
 
-          b-resolves = engine.query {
+          b-resolves = genScope.query {
             dataFilter = n: n.decls.val or null;
           } result "b";
         };
@@ -520,18 +520,18 @@
 
       demandDrivenEval =
         let
-          parentGraph = engine.overlays [
-            (engine.star "company" [
+          parentGraph = genScope.overlays [
+            (genScope.star "company" [
               "eng"
               "sales"
             ])
-            (engine.star "eng" [
+            (genScope.star "eng" [
               "platform"
               "frontend"
             ])
-            (engine.edge "infra" "platform")
+            (genScope.edge "infra" "platform")
           ];
-          nodes = engine.buildNodes {
+          nodes = genScope.buildNodes {
             inherit parentGraph;
             decls = {
               company = {
@@ -559,7 +559,7 @@
             imports = _self: _id: [ ];
 
             # Inherited: flows top-down via parent chain (Knuth 1968)
-            location = engine.inherit' {
+            location = genScope.inherit' {
               resolve = n: n.decls.location or null;
             };
 
@@ -575,7 +575,7 @@
               local + childTotal;
 
             # Parameterized attribute (Sloane 2010 §3)
-            configFor = engine.paramAttr (
+            configFor = genScope.paramAttr (
               self: id: param:
               let
                 node = self.node id;
@@ -585,7 +585,7 @@
             );
           };
 
-          r = engine.eval {
+          r = genScope.eval {
             roots = nodes;
             inherit attributes;
           };
@@ -609,8 +609,8 @@
 
       hoagSynthesis =
         let
-          nodes = engine.buildNodes {
-            parentGraph = engine.vertices [
+          nodes = genScope.buildNodes {
+            parentGraph = genScope.vertices [
               "dept:eng"
               "dept:sales"
               "dept:hr"
@@ -636,7 +636,7 @@
             };
           };
 
-          result = engine.eval {
+          result = genScope.eval {
             roots = nodes;
             attributes = {
               children =
@@ -674,7 +674,7 @@
           eng-budget = (result.node "dept:eng").decls.budget; # 500000 (unchanged)
 
           # Typed query finds synthesized nodes
-          audit-count = builtins.length (builtins.attrNames (engine.nodesByType result "audit")); # 2
+          audit-count = builtins.length (builtins.attrNames (genScope.nodesByType result "audit")); # 2
         };
 
       # ===================================================================
@@ -683,20 +683,20 @@
 
       circularAttributes =
         let
-          nodes = engine.buildNodes {
-            parentGraph = engine.vertex "system";
+          nodes = genScope.buildNodes {
+            parentGraph = genScope.vertex "system";
             decls = {
               system = {
                 target-accuracy = 95;
               };
             };
           };
-          result = engine.eval {
+          result = genScope.eval {
             roots = nodes;
             attributes = {
               children = _self: _id: { };
               imports = _self: _id: [ ];
-              accuracy = engine.circular { init = 0; } (
+              accuracy = genScope.circular { init = 0; } (
                 self: id: prev:
                 let
                   target = (self.node id).decls.target-accuracy;
@@ -722,13 +722,13 @@
 
       importCollection =
         let
-          nodes = engine.buildNodes {
-            parentGraph = engine.vertices [
+          nodes = genScope.buildNodes {
+            parentGraph = genScope.vertices [
               "app"
               "utils"
               "math"
             ];
-            importGraph = engine.overlay (engine.edge "app" "utils") (engine.edge "app" "math");
+            importGraph = genScope.overlay (genScope.edge "app" "utils") (genScope.edge "app" "math");
             decls = {
               app = { };
               utils = {
@@ -745,12 +745,12 @@
               };
             };
           };
-          result = engine.eval {
+          result = genScope.eval {
             roots = nodes;
             attributes = {
               children = _self: id: lib.filterAttrs (_: n: n.parent == id) nodes;
               imports = _self: id: (_self.node id).decls.__edges.I or [ ];
-              available-fns = engine.collectImports (self: importId: (self.node importId).decls.exports or [ ]);
+              available-fns = genScope.collectImports (self: importId: (self.node importId).decls.exports or [ ]);
             };
           };
         in
@@ -765,8 +765,8 @@
 
       structuralSubtyping =
         let
-          nodes = engine.buildNodes {
-            parentGraph = engine.vertices [
+          nodes = genScope.buildNodes {
+            parentGraph = genScope.vertices [
               "point2d"
               "point3d"
               "color"
@@ -788,7 +788,7 @@
               };
             };
           };
-          result = engine.eval {
+          result = genScope.eval {
             roots = nodes;
             attributes = {
               children = _self: id: lib.filterAttrs (_: n: n.parent == id) nodes;
@@ -797,10 +797,10 @@
           };
         in
         {
-          is-subtype = engine.subtypeOf { } result "point2d" "point3d"; # true
-          not-subtype = engine.subtypeOf { } result "point3d" "point2d"; # false
-          different = engine.subtypeOf { } result "color" "point3d"; # false
-          value-eq = engine.subtypeOf {
+          is-subtype = genScope.subtypeOf { } result "point2d" "point3d"; # true
+          not-subtype = genScope.subtypeOf { } result "point3d" "point2d"; # false
+          different = genScope.subtypeOf { } result "color" "point3d"; # false
+          value-eq = genScope.subtypeOf {
             eq =
               _k: a: b:
               a == b;
@@ -813,8 +813,8 @@
 
       customEdgeLabels =
         let
-          nodes = engine.buildNodes {
-            parentGraph = engine.vertices [
+          nodes = genScope.buildNodes {
+            parentGraph = genScope.vertices [
               "baseRecord"
               "extRecord"
               "classA"
@@ -822,9 +822,9 @@
             ];
             edgeGraphs = {
               # R = record field extension
-              R = engine.edge "extRecord" "baseRecord";
+              R = genScope.edge "extRecord" "baseRecord";
               # E = class inheritance
-              E = engine.edge "classB" "classA";
+              E = genScope.edge "classB" "classA";
             };
             decls = {
               baseRecord = {
@@ -842,7 +842,7 @@
               };
             };
           };
-          result = engine.eval {
+          result = genScope.eval {
             roots = nodes;
             attributes = {
               children = _self: id: lib.filterAttrs (_: n: n.parent == id) nodes;
@@ -854,11 +854,11 @@
         in
         {
           # followEdge: get targets for a custom label
-          record-extends = engine.followEdge "R" result "extRecord";
+          record-extends = genScope.followEdge "R" result "extRecord";
           # -> [ "baseRecord" ]
 
           # collectByLabel: gather data from custom-labeled edges
-          inherited-methods = engine.collectByLabel "E" (
+          inherited-methods = genScope.collectByLabel "E" (
             self: id: builtins.attrNames (builtins.removeAttrs (self.node id).decls [ "__edges" ])
           ) result "classB";
           # -> [ "method-foo" ]
@@ -874,8 +874,8 @@
 
       scopedRelations =
         let
-          nodes = engine.buildNodes {
-            parentGraph = engine.edge "inner" "outer";
+          nodes = genScope.buildNodes {
+            parentGraph = genScope.edge "inner" "outer";
             decls = {
               outer = {
                 x = 42;
@@ -890,7 +890,7 @@
               inner = { };
             };
           };
-          result = engine.eval {
+          result = genScope.eval {
             roots = nodes;
             attributes = {
               children = _self: id: lib.filterAttrs (_: n: n.parent == id) nodes;
@@ -900,17 +900,17 @@
         in
         {
           # Value namespace (via decls)
-          value-x = engine.query {
+          value-x = genScope.query {
             dataFilter = n: n.decls.x or null;
           } result "inner"; # -> 42
 
           # Type namespace (via decls.__typeRel)
-          type-x = engine.query {
+          type-x = genScope.query {
             dataFilter = n: (n.decls.__typeRel or { }).x or null;
           } result "inner"; # -> "Int"
 
           # Doc namespace
-          doc-x = engine.query {
+          doc-x = genScope.query {
             dataFilter = n: (n.decls.__docRel or { }).x or null;
           } result "inner"; # -> "The x coordinate"
 
@@ -924,16 +924,16 @@
 
       evalDebugDemo =
         let
-          nodes = engine.buildNodes {
-            parentGraph = engine.vertices [
+          nodes = genScope.buildNodes {
+            parentGraph = genScope.vertices [
               "a"
               "b"
             ];
-            importGraph = engine.overlay (engine.edge "a" "b") (engine.edge "b" "a");
+            importGraph = genScope.overlay (genScope.edge "a" "b") (genScope.edge "b" "a");
           };
 
           # Intentionally cyclic: a.ping reads b.ping, b.ping reads a.ping
-          result = engine.evalDebug {
+          result = genScope.evalDebug {
             roots = nodes;
             attributes = {
               children = _self: _id: { };
@@ -961,8 +961,8 @@
 
       globalCollection =
         let
-          nodes = engine.buildNodes {
-            parentGraph = engine.star "org" [
+          nodes = genScope.buildNodes {
+            parentGraph = genScope.star "org" [
               "teamA"
               "teamB"
               "teamC"
@@ -986,7 +986,7 @@
               teamC = "team";
             };
           };
-          result = engine.eval {
+          result = genScope.eval {
             roots = nodes;
             attributes = {
               children = _self: id: lib.filterAttrs (_: n: n.parent == id) nodes;
@@ -997,12 +997,12 @@
         {
           # collect: iterate all nodes (global -- use sparingly)
           all-sizes = builtins.sort builtins.lessThan (
-            engine.collect { } (self: id: [ ((self.node id).decls.size or 0) ]) result
+            genScope.collect { } (self: id: [ ((self.node id).decls.size or 0) ]) result
           ); # -> [ 0 3 5 8 ]
 
           # collectByType: filter by type tag
           team-sizes = builtins.sort builtins.lessThan (
-            engine.collectByType "team" (self: id: [ (self.node id).decls.size ]) result
+            genScope.collectByType "team" (self: id: [ (self.node id).decls.size ]) result
           ); # -> [ 3 5 8 ]
         };
     };

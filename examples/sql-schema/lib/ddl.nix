@@ -2,7 +2,7 @@
 #
 # Reads schema metadata to emit columns with types, FK constraints,
 # CHECK constraints from refinements, and indexes from ref fields.
-{ lib, schemaLib }:
+{ lib, genSchema }:
 let
   # SQL reserved words that need escaping
   reservedWords = [

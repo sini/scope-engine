@@ -19,38 +19,38 @@
 #   |   +-- doc-2
 #   +-- project-y/ (low sensitivity)
 #       +-- doc-3
-{ engine, lib }:
+{ genScope, lib }:
 {
-  roots = engine.buildNodes {
+  roots = genScope.buildNodes {
     # Resource hierarchy (parent edges)
-    parentGraph = engine.overlays [
-      (engine.star "org" [
+    parentGraph = genScope.overlays [
+      (genScope.star "org" [
         "project-x"
         "project-y"
       ])
-      (engine.star "project-x" [
+      (genScope.star "project-x" [
         "doc-1"
         "doc-2"
       ])
-      (engine.edge "doc-3" "project-y")
+      (genScope.edge "doc-3" "project-y")
     ];
     edgeGraphs = {
       # R = role inheritance (Neron 2015 §3, Fig. 16)
-      R = engine.overlays [
-        (engine.edge "editor" "viewer")
-        (engine.edge "admin" "editor")
-        (engine.edge "auditor" "viewer")
+      R = genScope.overlays [
+        (genScope.edge "editor" "viewer")
+        (genScope.edge "admin" "editor")
+        (genScope.edge "auditor" "viewer")
       ];
       # A = role assignment (user -> role)
-      A = engine.overlays [
-        (engine.edge "alice" "admin")
-        (engine.edge "bob" "editor")
-        (engine.edge "bob" "auditor")
-        (engine.edge "carol" "viewer")
-        (engine.edge "dave" "editor")
+      A = genScope.overlays [
+        (genScope.edge "alice" "admin")
+        (genScope.edge "bob" "editor")
+        (genScope.edge "bob" "auditor")
+        (genScope.edge "carol" "viewer")
+        (genScope.edge "dave" "editor")
       ];
       # D = deny override (user -> resource)
-      D = engine.edge "dave" "project-x";
+      D = genScope.edge "dave" "project-x";
     };
     decls = {
       viewer = {

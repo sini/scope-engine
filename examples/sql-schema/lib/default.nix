@@ -1,19 +1,19 @@
 {
   lib,
-  schemaLib,
-  graphLib,
-  selectLib,
-  deriveLib,
-  bindLib,
+  genSchema,
+  genGraph,
+  genSelect,
+  genDerive,
+  genBind,
 }:
 let
   rawFleet = import ./fleet.nix;
-  schemaModule = import ./schema.nix { inherit lib schemaLib; };
+  schemaModule = import ./schema.nix { inherit lib genSchema; };
   evaluated = schemaModule.evalSchema rawFleet;
 
   # Graph construction: kind-level and instance-level
   # Bridge from gen-schema introspection to gen-scope/gen-graph (consumer-side)
-  kindNodes = graphLib.mock.mkGraph {
+  kindNodes = genGraph.mkGraph {
     edges = map (e: {
       from = e.from;
       to = e.to;
@@ -73,62 +73,62 @@ let
         ) evaluated.fleet
       );
     in
-    graphLib.mock.mkGraph {
+    genGraph.mkGraph {
       edges = instanceEdges;
       nodeData = allInstances;
     };
 
   # SQL parser + engine
   sqlParser = import ./sql.nix { inherit lib; };
-  sqlEngine = import ./engine.nix { inherit lib selectLib; };
+  sqlEngine = import ./engine.nix { inherit lib genSelect; };
 
   # DDL generator
-  ddlLib = import ./ddl.nix { inherit lib schemaLib; };
+  ddlLib = import ./ddl.nix { inherit lib genSchema; };
   ddl = ddlLib.generateDDL evaluated.schema;
 
   # Synthesis
-  aclLib = import ./acl.nix { inherit lib graphLib instanceNodes; };
+  aclLib = import ./acl.nix { inherit lib genGraph instanceNodes; };
   reachLib = import ./reachability.nix { inherit lib; };
   effectiveAccess = aclLib.synthesizeAccess rawFleet;
   networkReachability = reachLib.synthesizeReachability rawFleet;
 
   # NixOS configuration generation
   nixosLib = import ./nixos.nix {
-    inherit lib bindLib;
+    inherit lib genBind;
   };
 
   # Rule-based host configuration (gen-derive stratified dispatch)
   rulesLib = import ./rules.nix {
-    inherit lib deriveLib selectLib;
+    inherit lib genDerive genSelect;
   };
 
-  sel = selectLib;
+  sel = genSelect;
 
   # Default demo rules — gen-derive mkRule with gen-select selectors
   demoRules = [
     # All servers get SSH (unconditional)
-    (deriveLib.mkRule {
+    (genDerive.mkRule {
       condition = sel.star;
       produce = _id: _ctx: [ (rulesLib.fx.nixos { services.openssh.enable = true; }) ];
       identity = "ssh-everywhere";
     })
 
     # Web-tagged servers get nginx
-    (deriveLib.mkRule {
+    (genDerive.mkRule {
       condition = sel.when (_id: ctx: builtins.elem "web" ((ctx.data _id).tags or [ ]));
       produce = _id: _ctx: [ (rulesLib.fx.nixos { services.nginx.enable = true; }) ];
       identity = "web-nginx";
     })
 
     # Database-tagged servers get postgresql
-    (deriveLib.mkRule {
+    (genDerive.mkRule {
       condition = sel.when (_id: ctx: builtins.elem "database" ((ctx.data _id).tags or [ ]));
       produce = _id: _ctx: [ (rulesLib.fx.nixos { services.postgresql.enable = true; }) ];
       identity = "db-postgresql";
     })
 
     # ACME certs: servers with exposed port 443
-    (deriveLib.mkRule {
+    (genDerive.mkRule {
       condition = sel.when (
         id: _ctx:
         let
@@ -141,7 +141,7 @@ let
     })
 
     # Admin-role users on server get sudo
-    (deriveLib.mkRule {
+    (genDerive.mkRule {
       condition = sel.when (
         id: _ctx:
         let
@@ -156,7 +156,7 @@ let
     })
 
     # Prod servers get monitoring
-    (deriveLib.mkRule {
+    (genDerive.mkRule {
       condition = sel.when (_id: ctx: (ctx.data _id).environment == "prod");
       produce = _id: _ctx: [
         (rulesLib.fx.nixos { services.prometheus.exporters.node.enable = true; })
@@ -166,7 +166,7 @@ let
 
     # --- Fixpoint convergence demo ---
     # Pass 1: web servers get enrichment flag
-    (deriveLib.mkRule {
+    (genDerive.mkRule {
       condition = sel.when (_id: ctx: builtins.elem "web" ((ctx.data _id).tags or [ ]));
       produce = _id: _ctx: [
         (rulesLib.fx.enrich {
@@ -178,7 +178,7 @@ let
     })
 
     # Pass 2: fires only after enrichment adds has-nginx to context
-    (deriveLib.mkRule {
+    (genDerive.mkRule {
       condition = sel.when (_id: ctx: (ctx.data _id).has-nginx or false);
       produce = _id: _ctx: [
         (rulesLib.fx.nixos { services.prometheus.exporters.nginx.enable = true; })
@@ -210,15 +210,15 @@ in
   inherit kindNodes instanceNodes;
 
   # gen-graph queries on kind-level graph
-  kindRoots = graphLib.roots kindNodes;
-  kindLeaves = graphLib.leaves kindNodes;
-  kindCycles = graphLib.cycles kindNodes;
-  kindMigrationOrder = graphLib.roots kindNodes;
+  kindRoots = genGraph.roots kindNodes;
+  kindLeaves = genGraph.leaves kindNodes;
+  kindCycles = genGraph.cycles kindNodes;
+  kindMigrationOrder = genGraph.roots kindNodes;
 
   # gen-graph queries on instance-level graph
-  reachableFrom = graphLib.reachableFrom instanceNodes;
-  dependents = graphLib.dependents instanceNodes;
-  impactOf = graphLib.impactOf instanceNodes;
+  reachableFrom = genGraph.reachableFrom instanceNodes;
+  dependents = genGraph.dependents instanceNodes;
+  impactOf = genGraph.impactOf instanceNodes;
 
   # SQL parser + engine
   inherit (sqlParser) parseSql tokenize;
@@ -259,10 +259,10 @@ in
     buildAllHostConfigs
     ;
   inherit
-    deriveLib
-    selectLib
-    bindLib
-    graphLib
+    genDerive
+    genSelect
+    genBind
+    genGraph
     demoRules
     ;
   inherit hostConfigs queryHostConfigs;

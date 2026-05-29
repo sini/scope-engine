@@ -1,9 +1,9 @@
-{ lib, engine, ... }:
+{ lib, genScope, ... }:
 let
   # Basic build
-  basic = engine.buildNodes {
-    parentGraph = engine.edge "child" "parent";
-    importGraph = engine.edge "child" "lib";
+  basic = genScope.buildNodes {
+    parentGraph = genScope.edge "child" "parent";
+    importGraph = genScope.edge "child" "lib";
     decls = {
       parent = {
         x = 1;
@@ -23,12 +23,12 @@ let
   };
 
   # No edges (vertices declared via parentGraph)
-  noEdges = engine.buildNodes {
-    parentGraph = engine.vertices [
+  noEdges = genScope.buildNodes {
+    parentGraph = genScope.vertices [
       "a"
       "b"
     ];
-    importGraph = engine.empty;
+    importGraph = genScope.empty;
     decls = {
       a = {
         val = 1;
@@ -43,11 +43,11 @@ let
   };
 
   # Multiple import edges
-  multiImport = engine.buildNodes {
-    parentGraph = engine.empty;
-    importGraph = engine.overlays [
-      (engine.edge "a" "b")
-      (engine.edge "a" "c")
+  multiImport = genScope.buildNodes {
+    parentGraph = genScope.empty;
+    importGraph = genScope.overlays [
+      (genScope.edge "a" "b")
+      (genScope.edge "a" "c")
     ];
     decls = {
       a = { };
@@ -125,10 +125,10 @@ in
       # strict=true (default): P partial function violation throws eagerly
       expr =
         !(builtins.tryEval (
-          engine.buildNodes {
-            parentGraph = engine.overlays [
-              (engine.edge "x" "a")
-              (engine.edge "x" "b")
+          genScope.buildNodes {
+            parentGraph = genScope.overlays [
+              (genScope.edge "x" "a")
+              (genScope.edge "x" "b")
             ];
           }
         )).success;
@@ -139,11 +139,11 @@ in
       # strict=false: throws only when conflicting node's parent is accessed
       expr =
         let
-          nodes = engine.buildNodes {
+          nodes = genScope.buildNodes {
             strict = false;
-            parentGraph = engine.overlays [
-              (engine.edge "x" "a")
-              (engine.edge "x" "b")
+            parentGraph = genScope.overlays [
+              (genScope.edge "x" "a")
+              (genScope.edge "x" "b")
             ];
           };
         in
@@ -160,11 +160,11 @@ in
 
     test-custom-edge-graphs =
       let
-        custom = engine.buildNodes {
-          parentGraph = engine.empty;
-          importGraph = engine.empty;
+        custom = genScope.buildNodes {
+          parentGraph = genScope.empty;
+          importGraph = genScope.empty;
           edgeGraphs = {
-            D = engine.edge "a" "b";
+            D = genScope.edge "a" "b";
           };
           decls = {
             a = { };

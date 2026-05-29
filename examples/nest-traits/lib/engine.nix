@@ -1,6 +1,6 @@
 {
   lib,
-  engine,
+  genScope,
   selectorsLib,
   traitsLib,
   dom,

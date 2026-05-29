@@ -21,10 +21,10 @@
 #   class Shape  { area: () -> Num }
 #   class Circle extends Shape { radius: Num }
 #   class Rect   extends Shape { width: Num, height: Num }
-{ engine, lib }:
+{ genScope, lib }:
 let
-  roots = engine.buildNodes {
-    parentGraph = engine.star "root" [
+  roots = genScope.buildNodes {
+    parentGraph = genScope.star "root" [
       "Point2D"
       "Point3D"
       "Color"
@@ -37,11 +37,11 @@ let
     ];
     edgeGraphs = {
       # R = record field extension (van Antwerpen 2018 Fig. 4, 5)
-      R = engine.edge "NamedPoint" "Point2D";
+      R = genScope.edge "NamedPoint" "Point2D";
       # E = class inheritance (Neron 2015 §3, Fig. 16)
-      E = engine.overlays [
-        (engine.edge "Circle" "Shape")
-        (engine.edge "Rect" "Shape")
+      E = genScope.overlays [
+        (genScope.edge "Circle" "Shape")
+        (genScope.edge "Rect" "Shape")
       ];
     };
     decls = {

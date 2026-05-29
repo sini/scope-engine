@@ -1,6 +1,6 @@
-{ lib, engine, ... }:
+{ lib, genScope, ... }:
 let
-  inherit (engine)
+  inherit (genScope)
     parent
     children
     childrenIds
@@ -11,13 +11,13 @@ let
     ;
 
   # Tree: root → {a, b}; a → {c}
-  roots = engine.buildNodes {
-    parentGraph = engine.overlays [
-      (engine.edge "a" "root")
-      (engine.edge "b" "root")
-      (engine.edge "c" "a")
+  roots = genScope.buildNodes {
+    parentGraph = genScope.overlays [
+      (genScope.edge "a" "root")
+      (genScope.edge "b" "root")
+      (genScope.edge "c" "a")
     ];
-    importGraph = engine.empty;
+    importGraph = genScope.empty;
     decls = {
       root = { };
       a = { };
@@ -32,7 +32,7 @@ let
     };
   };
 
-  result = engine.eval {
+  result = genScope.eval {
     inherit roots;
     attributes = {
       children = self: id: lib.filterAttrs (_: n: n.parent == id) roots;

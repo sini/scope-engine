@@ -1,8 +1,8 @@
-{ lib, engine, ... }:
+{ lib, genScope, ... }:
 {
   flake.tests."graph" = {
     test-empty = {
-      expr = engine.empty;
+      expr = genScope.empty;
       expected = {
         vertices = [ ];
         edges = [ ];
@@ -10,7 +10,7 @@
     };
 
     test-vertex = {
-      expr = engine.vertex "a";
+      expr = genScope.vertex "a";
       expected = {
         vertices = [ "a" ];
         edges = [ ];
@@ -18,7 +18,7 @@
     };
 
     test-edge = {
-      expr = engine.edge "a" "b";
+      expr = genScope.edge "a" "b";
       expected = {
         vertices = [
           "a"
@@ -34,7 +34,7 @@
     };
 
     test-overlay-vertices = {
-      expr = (engine.overlay (engine.vertex "a") (engine.vertex "b")).vertices;
+      expr = (genScope.overlay (genScope.vertex "a") (genScope.vertex "b")).vertices;
       expected = [
         "a"
         "b"
@@ -42,7 +42,7 @@
     };
 
     test-overlay-edges = {
-      expr = (engine.overlay (engine.edge "a" "b") (engine.edge "c" "d")).edges;
+      expr = (genScope.overlay (genScope.edge "a" "b") (genScope.edge "c" "d")).edges;
       expected = [
         {
           from = "a";
@@ -56,7 +56,7 @@
     };
 
     test-connect-cross-product = {
-      expr = (engine.connect (engine.vertex "a") (engine.vertex "b")).edges;
+      expr = (genScope.connect (genScope.vertex "a") (genScope.vertex "b")).edges;
       expected = [
         {
           from = "a";
@@ -68,13 +68,13 @@
     test-connect-multi = {
       expr =
         builtins.length
-          (engine.connect
-            (engine.vertices [
+          (genScope.connect
+            (genScope.vertices [
               "a"
               "b"
             ])
             (
-              engine.vertices [
+              genScope.vertices [
                 "c"
                 "d"
               ]
@@ -85,7 +85,7 @@
 
     test-vertices = {
       expr =
-        (engine.vertices [
+        (genScope.vertices [
           "x"
           "y"
           "z"
@@ -99,7 +99,7 @@
 
     test-path = {
       expr =
-        (engine.path [
+        (genScope.path [
           "a"
           "b"
           "c"
@@ -117,7 +117,7 @@
     };
 
     test-path-single = {
-      expr = engine.path [ "a" ];
+      expr = genScope.path [ "a" ];
       expected = {
         vertices = [ "a" ];
         edges = [ ];
@@ -125,7 +125,7 @@
     };
 
     test-path-empty = {
-      expr = engine.path [ ];
+      expr = genScope.path [ ];
       expected = {
         vertices = [ ];
         edges = [ ];
@@ -134,7 +134,7 @@
 
     test-circuit = {
       expr =
-        (engine.circuit [
+        (genScope.circuit [
           "a"
           "b"
           "c"
@@ -158,7 +158,7 @@
     test-star = {
       expr =
         builtins.sort (a: b: a.from < b.from)
-          (engine.star "center" [
+          (genScope.star "center" [
             "l1"
             "l2"
           ]).edges;
@@ -175,7 +175,7 @@
     };
 
     test-gmap = {
-      expr = engine.gmap (x: "${x}-mapped") (engine.edge "a" "b");
+      expr = genScope.gmap (x: "${x}-mapped") (genScope.edge "a" "b");
       expected = {
         vertices = [
           "a-mapped"
@@ -191,8 +191,8 @@
     };
 
     test-induce = {
-      expr = engine.induce (x: x != "b") (
-        engine.path [
+      expr = genScope.induce (x: x != "b") (
+        genScope.path [
           "a"
           "b"
           "c"
@@ -208,7 +208,7 @@
     };
 
     test-transpose = {
-      expr = (engine.transpose (engine.edge "a" "b")).edges;
+      expr = (genScope.transpose (genScope.edge "a" "b")).edges;
       expected = [
         {
           from = "b";
@@ -219,10 +219,10 @@
 
     test-overlays = {
       expr =
-        (engine.overlays [
-          (engine.vertex "a")
-          (engine.vertex "b")
-          (engine.vertex "c")
+        (genScope.overlays [
+          (genScope.vertex "a")
+          (genScope.vertex "b")
+          (genScope.vertex "c")
         ]).vertices;
       expected = [
         "a"
@@ -232,28 +232,28 @@
     };
 
     test-hasVertex-true = {
-      expr = engine.hasVertex "a" (engine.edge "a" "b");
+      expr = genScope.hasVertex "a" (genScope.edge "a" "b");
       expected = true;
     };
 
     test-hasVertex-false = {
-      expr = engine.hasVertex "c" (engine.edge "a" "b");
+      expr = genScope.hasVertex "c" (genScope.edge "a" "b");
       expected = false;
     };
 
     test-hasEdge-true = {
-      expr = engine.hasEdge "a" "b" (engine.edge "a" "b");
+      expr = genScope.hasEdge "a" "b" (genScope.edge "a" "b");
       expected = true;
     };
 
     test-hasEdge-false = {
-      expr = engine.hasEdge "b" "a" (engine.edge "a" "b");
+      expr = genScope.hasEdge "b" "a" (genScope.edge "a" "b");
       expected = false;
     };
 
     test-removeVertex = {
-      expr = engine.removeVertex "b" (
-        engine.path [
+      expr = genScope.removeVertex "b" (
+        genScope.path [
           "a"
           "b"
           "c"
@@ -270,8 +270,8 @@
 
     test-removeEdge = {
       expr =
-        (engine.removeEdge "a" "b" (
-          engine.path [
+        (genScope.removeEdge "a" "b" (
+          genScope.path [
             "a"
             "b"
             "c"

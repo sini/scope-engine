@@ -1,6 +1,6 @@
 # Config cascade tests.
 {
-  engine,
+  genScope,
   lib,
   result,
 }:
@@ -53,9 +53,9 @@
       cache = s.CACHE_TTL;
     };
 
-  api-environments = builtins.sort builtins.lessThan (engine.childrenIds result "api");
-  api-test-ancestors = engine.ancestors result "api.test";
+  api-environments = builtins.sort builtins.lessThan (genScope.childrenIds result "api");
+  api-test-ancestors = genScope.ancestors result "api.test";
   all-env-overrides = builtins.sort builtins.lessThan (
-    builtins.attrNames (engine.nodesByType result "env")
+    builtins.attrNames (genScope.nodesByType result "env")
   );
 }
