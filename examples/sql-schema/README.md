@@ -126,7 +126,7 @@ Rules use gen-derive's `mkRule` with gen-select selectors as conditions. Two act
 
 ```nix
 # Web servers get nginx
-deriveLib.mkRule {
+genDerive.mkRule {
   condition = sel.when (_id: ctx: builtins.elem "web" ((ctx.data _id).tags or []));
   produce = _id: _ctx: [ (fx.nixos { services.nginx.enable = true; }) ];
   identity = "web-nginx";
@@ -152,11 +152,11 @@ Pass 1 enriches web servers with `has-nginx = true`. Pass 2 fires only on enrich
 `nixos.nix` uses gen-bind to wrap server modules with contracts and provenance:
 
 ```nix
-bindLib.wrap {
+genBind.wrap {
   module = serverModuleFn;
   bindings = { inherit fleet serverName server; };
   contracts = {
-    server = bindLib.contract.hasFields [ "hostname" "os" "cores" "datacenter" "environment" ];
+    server = genBind.contract.hasFields [ "hostname" "os" "cores" "datacenter" "environment" ];
   };
   provenance = {
     server = { source = "fleet-registry"; scope = "server=${serverName}"; };
@@ -175,17 +175,17 @@ gen-graph runs on two graph levels:
 **Kind-level graph** -- schema kinds as nodes, ref declarations as edges:
 
 ```nix
-graphLib.roots kindNodes       # --> [ "datacenter" "environment" "ldap-group" ]
-graphLib.cycles kindNodes      # --> [ "loadbalancer" "server" "user" ] (self-refs)
+genGraph.roots kindNodes       # --> [ "datacenter" "environment" "ldap-group" ]
+genGraph.cycles kindNodes      # --> [ "loadbalancer" "server" "user" ] (self-refs)
 ```
 
 **Instance-level graph** -- 52 instances as nodes, resolved refs as edges:
 
 ```nix
-graphLib.reachableFrom instanceNodes "server:web-1"
+genGraph.reachableFrom instanceNodes "server:web-1"
 # --> [ "datacenter:us-east-1" "environment:prod" "subnet:us-east-1.primary.web" ... ]
 
-graphLib.dependents instanceNodes "datacenter:us-east-1"
+genGraph.dependents instanceNodes "datacenter:us-east-1"
 # --> [ "server:web-1" "network:us-east-1.primary" ... ]
 ```
 
@@ -196,7 +196,7 @@ Cross-model bridge: user --> ldap-role --> access-policy --> resource targets.
 Two scopes:
 
 - **direct**: user's assigned servers (or services on them, or LBs fronting those)
-- **transitive**: gen-graph `reachableFrom` on a bidirectional instance graph (`graphLib.transpose` + forward edges)
+- **transitive**: gen-graph `reachableFrom` on a bidirectional instance graph (`genGraph.transpose` + forward edges)
 
 ```nix
 effectiveAccess."alice:server:web-1".actions  # --> [ "sudo" "restart" "ssh" ]
@@ -230,7 +230,7 @@ matching = builtins.filter (id: sel.matches prodSelector id ctx) serverNodes;
 **gen-select --> gen-derive**: selector condition dispatches rule, produces actions
 
 ```nix
-testRule = deriveLib.mkRule {
+testRule = genDerive.mkRule {
   condition = sel.when (_id: ctx: builtins.elem "web" ((ctx.data _id).tags or []));
   produce = _id: _ctx: [{ __action = "tagged"; value = true; }];
   identity = "bridge-test";
@@ -240,7 +240,7 @@ testRule = deriveLib.mkRule {
 **gen-schema --> gen-graph**: schema introspection feeds kind-level graph for reachability
 
 ```nix
-graphLib.reachableFrom kindNodes "server"
+genGraph.reachableFrom kindNodes "server"
 # --> [ "datacenter" "environment" "network" "subnet" ]
 ```
 
